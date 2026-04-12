@@ -1,0 +1,61 @@
+export interface OxylabsDayStats {
+  date: string
+  requests: number
+  traffic_bytes: number
+}
+
+/**
+ * Fetches daily usage stats from OxyLabs for the last 30 days.
+ * Returns consumed requests and traffic per day.
+ *
+ * NOTE: OxyLabs does not expose a remaining-balance endpoint.
+ * These are consumed metrics only. Compare against your plan limit to derive utilization.
+ */
+export async function fetchOxylabsStats(): Promise<OxylabsDayStats[]> {
+  const username = process.env.OXYLABS_USERNAME!
+  const password = process.env.OXYLABS_PASSWORD!
+
+  if (!username || !password) {
+    console.warn('OXYLABS_USERNAME / OXYLABS_PASSWORD not set — skipping OxyLabs fetch')
+    return []
+  }
+
+  const credentials = Buffer.from(`${username}:${password}`).toString('base64')
+
+  const res = await fetch('https://data.oxylabs.io/v2/stats?group_by=day', {
+    headers: { Authorization: `Basic ${credentials}` },
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`OxyLabs stats API error: ${res.status} ${text}`)
+  }
+
+  const data = await res.json()
+
+  // The /v2/stats response wraps data in a `data` array.
+  // Each entry may have different field names depending on the product.
+  // We normalize to a common shape here.
+  const raw: Record<string, unknown>[] = Array.isArray(data?.data)
+    ? data.data
+    : Array.isArray(data?.statistics)
+      ? data.statistics
+      : Array.isArray(data)
+        ? data
+        : []
+
+  return raw.map((d) => ({
+    date: String(d.date ?? d.day ?? d.period ?? ''),
+    requests: Number(d.all_count ?? d.requests ?? d.requests_consumed ?? 0),
+    traffic_bytes: Number(d.request_traffic ?? d.traffic_bytes ?? d.bandwidth ?? 0),
+  }))
+}
+
+/**
+ * Returns today's total request count from the stats array.
+ */
+export function getTodayRequestCount(stats: OxylabsDayStats[]): number {
+  const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
+  const todayStat = stats.find((s) => s.date.startsWith(today))
+  return todayStat?.requests ?? 0
+}

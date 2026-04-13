@@ -1,50 +1,52 @@
-export interface GeminiQuotaResult {
-  /** Tokens remaining this minute (from rate-limit header) */
-  remainingTokensPerMinute: number
-  /** Total token limit per minute */
-  limitTokensPerMinute: number
-  /** Quota health 0–1 (remaining / limit) */
-  quotaHealth: number
-  /** Token count of the probe request itself (always ~1) */
+export interface GeminiProbeResult {
+  /** true = API key valid and reachable */
+  alive: boolean
+  /** Tokens used by this probe (from usageMetadata) */
   probeTokenCount: number
 }
 
 /**
- * Makes a free countTokens call to Gemini to probe rate-limit headers.
- * countTokens does not generate content and costs $0.
- *
- * Returns remaining token quota for the current minute window.
- * Use this for "API health" monitoring rather than exact USD billing.
+ * Probes Gemini API health with a 1-token generateContent call.
+ * Google's API does NOT return rate-limit headers — we can only detect alive/down.
+ * Model: gemini-2.5-flash (cheapest available; uses ~1 token per probe).
  */
-export async function probeGeminiQuota(): Promise<GeminiQuotaResult | null> {
+export async function probeGeminiQuota(): Promise<GeminiProbeResult | null> {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) {
     console.warn('GEMINI_API_KEY not set — skipping Gemini probe')
     return null
   }
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:countTokens?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: '.' }] }] }),
-    }
-  )
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 8000)
+
+  let res: Response
+  try {
+    res = await fetch(
+      `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: '.' }] }],
+          generationConfig: { maxOutputTokens: 1 },
+        }),
+        signal: controller.signal,
+      }
+    )
+  } finally {
+    clearTimeout(timeout)
+  }
 
   if (!res.ok) {
-    throw new Error(`Gemini countTokens error: ${res.status}`)
+    const errBody = await res.text()
+    console.error(`[gemini] probe failed: ${res.status} — ${errBody.slice(0, 200)}`)
+    return { alive: false, probeTokenCount: 0 }
   }
 
   const data = await res.json()
+  const tokenCount = Number(data?.usageMetadata?.totalTokenCount ?? 1)
+  console.log(`[gemini] probe OK — ${tokenCount} tokens`)
 
-  const remaining = Math.max(0, Number(res.headers.get('x-ratelimit-remaining-tokens') ?? 0) || 0)
-  const limit = Math.max(1, Number(res.headers.get('x-ratelimit-limit-tokens') ?? 1) || 1)
-
-  return {
-    remainingTokensPerMinute: remaining,
-    limitTokensPerMinute: limit,
-    quotaHealth: limit > 0 ? remaining / limit : 1,
-    probeTokenCount: Number(data.totalTokens ?? 1),
-  }
+  return { alive: true, probeTokenCount: tokenCount }
 }

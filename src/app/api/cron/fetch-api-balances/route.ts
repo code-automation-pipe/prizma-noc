@@ -2,12 +2,11 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 
 import { probeGeminiQuota } from '@/lib/gemini/client'
+import { fetchGeminiQuotaUsage } from '@/lib/gemini/quota-client'
 import { fetchTmapiBalance } from '@/lib/tmapi/client'
-import { fetchModalBalance } from '@/lib/modal/client'
 import { logApiBalance } from '@/lib/axiom/events'
 import { db } from '@/lib/db'
 import { api_ledger } from '@/lib/db/schema'
-import { eq, sum } from 'drizzle-orm'
 import { evaluateAlerts } from '@/lib/alerts/engine'
 
 export async function GET(request: Request) {
@@ -19,18 +18,51 @@ export async function GET(request: Request) {
 
   // --- Gemini ---
   try {
+    // First: verify the API key is alive
     const gemini = await probeGeminiQuota()
-    if (gemini) {
-      await logApiBalance({
+    if (!gemini?.alive) {
+      console.warn('[gemini] probe failed — storing error snapshot')
+      await db.insert(api_ledger).values({
         service: 'gemini',
-        balance: gemini.quotaHealth,
-        quota_health: gemini.quotaHealth,
+        entry_type: 'balance_snapshot',
+        amount: '0',
+        note: 'probe failed',
       })
-      const ledgerResult = await db
-        .select({ total: sum(api_ledger.amount) })
-        .from(api_ledger)
-        .where(eq(api_ledger.service, 'gemini'))
-      apiBalances.set('gemini', Number(ledgerResult[0]?.total ?? 0))
+      apiBalances.set('gemini', 0)
+    } else {
+      // Try to get real quota % from Cloud Monitoring (requires service account)
+      const quota = await fetchGeminiQuotaUsage()
+      if (quota) {
+        // Store remaining % (0–100)
+        console.log(`[gemini] quota ${quota.remainingPercent}% remaining`)
+        await db.insert(api_ledger).values({
+          service: 'gemini',
+          entry_type: 'balance_snapshot',
+          amount: String(quota.remainingPercent),
+          note: `${quota.tokensUsed}/${quota.tokensLimit} tokens used (${quota.quotaMetric})`,
+        })
+        apiBalances.set('gemini', quota.remainingPercent)
+        try {
+          await logApiBalance({ service: 'gemini', balance: quota.remainingPercent, quota_health: quota.remainingPercent / 100 })
+        } catch (axiomErr) {
+          console.warn('[gemini] Axiom log failed (non-fatal):', axiomErr)
+        }
+      } else {
+        // No service account configured — fall back to alive indicator
+        console.log('[gemini] no quota data (service account not configured) — storing alive=1')
+        await db.insert(api_ledger).values({
+          service: 'gemini',
+          entry_type: 'balance_snapshot',
+          amount: '1',
+          note: `alive, probe=${gemini.probeTokenCount} tokens`,
+        })
+        apiBalances.set('gemini', 1)
+        try {
+          await logApiBalance({ service: 'gemini', balance: 1, quota_health: 1 })
+        } catch (axiomErr) {
+          console.warn('[gemini] Axiom log failed (non-fatal):', axiomErr)
+        }
+      }
     }
   } catch (err) {
     console.error('Gemini probe failed:', err)
@@ -40,34 +72,21 @@ export async function GET(request: Request) {
   try {
     const tmapi = await fetchTmapiBalance()
     if (tmapi) {
-      await logApiBalance({ service: 'tmapi', balance: tmapi.balance })
-      apiBalances.set('tmapi', tmapi.balance)
       await db.insert(api_ledger).values({
         service: 'tmapi',
         entry_type: 'balance_snapshot',
         amount: String(tmapi.balance),
         note: 'auto-fetched',
       })
+      apiBalances.set('tmapi', tmapi.balance)
+      try {
+        await logApiBalance({ service: 'tmapi', balance: tmapi.balance })
+      } catch (axiomErr) {
+        console.warn('[tmapi] Axiom log failed (non-fatal):', axiomErr)
+      }
     }
   } catch (err) {
     console.error('TMAPI balance fetch failed:', err)
-  }
-
-  // --- Modal ---
-  try {
-    const modal = await fetchModalBalance()
-    if (modal) {
-      await logApiBalance({ service: 'modal', balance: modal.balance })
-      apiBalances.set('modal', modal.balance)
-      await db.insert(api_ledger).values({
-        service: 'modal',
-        entry_type: 'balance_snapshot',
-        amount: String(modal.balance),
-        note: 'auto-fetched',
-      })
-    }
-  } catch (err) {
-    console.error('Modal balance fetch failed:', err)
   }
 
   await evaluateAlerts({

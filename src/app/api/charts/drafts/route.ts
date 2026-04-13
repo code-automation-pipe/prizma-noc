@@ -1,11 +1,11 @@
-import { queryAxiom, normalizeAxiomResult } from '@/lib/axiom/client'
+import { queryAxiom, normalizeAxiomResult, DATASET } from '@/lib/axiom/client'
 
 export const revalidate = 300
 
 export async function GET() {
   try {
     const apl = `
-['etsy-monitor']
+['${DATASET}']
 | where type == 'draft_snapshot'
 | where _time > ago(7d)
 | summarize draft_count = sum(draft_count) by bin(_time, 1h), shop_id, store_name

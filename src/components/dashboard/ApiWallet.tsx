@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Plus } from 'lucide-react'
+import { Plus, RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -30,10 +30,10 @@ interface ApiWalletProps {
 }
 
 const SERVICES = [
-  { key: 'oxylabs', label: 'OxyLabs', isLive: true },
-  { key: 'gemini', label: 'Google AI Studio', isLive: false },
-  { key: 'tmapi', label: 'TMAPI / 1688', isLive: false },
-  { key: 'modal', label: 'Modal (GPU)', isLive: false },
+  { key: 'oxylabs', label: 'OxyLabs', isLive: false, noBalance: true, displayMode: 'usd' as const },
+  { key: 'gemini', label: 'Google AI Studio', isLive: true, noBalance: false, displayMode: 'status' as const },
+  { key: 'tmapi', label: 'TMAPI / 1688', isLive: false, noBalance: false, displayMode: 'usd' as const },
+  { key: 'modal', label: 'Modal (GPU)', isLive: false, noBalance: false, displayMode: 'usd' as const },
 ] as const
 
 export function ApiWallet({ ledger }: ApiWalletProps) {
@@ -44,6 +44,18 @@ export function ApiWallet({ ledger }: ApiWalletProps) {
   const [note, setNote] = useState('')
 
   const queryClient = useQueryClient()
+
+  const refreshMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/admin/refresh-balances', { method: 'POST' })
+      if (!res.ok) throw new Error('Refresh failed')
+    },
+    onSuccess: () => {
+      toast.success('Balances refreshed')
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+    onError: () => toast.error('Failed to refresh balances'),
+  })
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -69,6 +81,16 @@ export function ApiWallet({ ledger }: ApiWalletProps) {
     <section>
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-lg font-semibold">API Wallet</h2>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => refreshMutation.mutate()}
+            disabled={refreshMutation.isPending}
+            className="inline-flex items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
+            {refreshMutation.isPending ? 'Fetching…' : 'Fetch Balances'}
+          </button>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger
             className="inline-flex items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground"
@@ -141,14 +163,17 @@ export function ApiWallet({ ledger }: ApiWalletProps) {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {SERVICES.map((svc) => {
-          const balance = svc.isLive ? null : (ledger.balances[svc.key] ?? 0)
+          const balance = svc.noBalance ? null : (ledger.balances[svc.key] ?? null)
           const dailySpend = ledger.daily_spend[svc.key] ?? 0
           const cumSpend = ledger.cumulative_spend[svc.key] ?? 0
-          const isLow = balance !== null && balance < 10
+          const isStatus = svc.displayMode === 'status'
+          // status mode: balance===1 alive, balance===0 error, null = never probed
+          const isLow = !isStatus && balance !== null && balance < 10
 
           return (
             <Card key={svc.key} className={isLow ? 'border-destructive' : ''}>
@@ -161,7 +186,17 @@ export function ApiWallet({ ledger }: ApiWalletProps) {
                 </div>
               </CardHeader>
               <CardContent className="px-4 pb-4 flex flex-col gap-1">
-                {balance !== null ? (
+                {isStatus ? (
+                  balance === null
+                    ? <p className="text-sm text-muted-foreground">Not probed yet</p>
+                    : balance > 1
+                      ? <p className={`text-2xl font-bold ${balance < 20 ? 'text-destructive' : 'text-green-600'}`}>
+                          {Math.round(balance)}%
+                        </p>
+                      : <p className={`text-xl font-bold ${balance === 1 ? 'text-green-600' : 'text-destructive'}`}>
+                          {balance === 1 ? 'Active' : 'Error'}
+                        </p>
+                ) : balance !== null ? (
                   <p className={`text-2xl font-bold ${isLow ? 'text-destructive' : ''}`}>
                     ${balance.toFixed(2)}
                   </p>
@@ -169,8 +204,14 @@ export function ApiWallet({ ledger }: ApiWalletProps) {
                   <p className="text-sm text-muted-foreground">No balance endpoint</p>
                 )}
                 <div className="text-xs text-muted-foreground space-y-0.5">
-                  <p>Today: ${dailySpend.toFixed(2)}</p>
-                  <p>Cumulative: ${cumSpend.toFixed(2)}</p>
+                  {isStatus ? (
+                    <p>{balance !== null && balance > 1 ? 'Quota remaining this minute' : 'API reachability probe'}</p>
+                  ) : (
+                    <>
+                      <p>Today: ${dailySpend.toFixed(2)}</p>
+                      <p>Cumulative: ${cumSpend.toFixed(2)}</p>
+                    </>
+                  )}
                 </div>
               </CardContent>
             </Card>

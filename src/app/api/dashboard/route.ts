@@ -49,12 +49,16 @@ export async function GET() {
 
     if (snapshots.length > 0) {
       balance = Number(snapshots[0].amount)
+      balances[service] = balance
     } else {
+      let hasEntries = false
       for (const e of serviceEntries) {
         const amt = Number(e.amount)
-        if (e.entry_type === 'topup') balance += amt
-        else if (e.entry_type === 'spend') balance -= amt
+        if (e.entry_type === 'topup') { balance += amt; hasEntries = true }
+        else if (e.entry_type === 'spend') { balance -= amt; hasEntries = true }
       }
+      if (hasEntries) balances[service] = balance
+      // no entries → key absent from balances → UI sees null
     }
 
     for (const e of serviceEntries) {
@@ -64,8 +68,6 @@ export async function GET() {
         if (new Date(e.created_at).toDateString() === todayStr) todaySpend += amt
       }
     }
-
-    balances[service] = balance
     dailySpend[service] = todaySpend
     cumulativeSpend[service] = cumSpend
   }

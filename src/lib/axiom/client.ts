@@ -1,5 +1,5 @@
 const AXIOM_TOKEN = process.env.AXIOM_TOKEN!
-const DATASET = process.env.AXIOM_DATASET ?? 'etsy-monitor'
+export const DATASET = process.env.AXIOM_DATASET ?? 'etsy-monitor'
 
 /**
  * Ingest one or more events into Axiom.
@@ -10,7 +10,7 @@ export async function ingestEvents(events: Record<string, unknown>[]): Promise<v
     console.warn('AXIOM_TOKEN not set — skipping event ingest')
     return
   }
-  const res = await fetch(`https://cloud.axiom.co/v1/datasets/${DATASET}/ingest`, {
+  const res = await fetch(`https://api.axiom.co/v1/datasets/${DATASET}/ingest`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${AXIOM_TOKEN}`,
@@ -45,7 +45,7 @@ export async function queryAxiom(apl: string): Promise<AxiomQueryResult> {
     console.warn('AXIOM_TOKEN not set — returning empty result')
     return {}
   }
-  const res = await fetch('https://cloud.axiom.co/v1/query/_apl?format=tabular', {
+  const res = await fetch('https://api.axiom.co/v1/datasets/_apl?format=tabular', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${AXIOM_TOKEN}`,

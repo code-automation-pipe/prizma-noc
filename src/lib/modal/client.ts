@@ -15,23 +15,33 @@ export interface ModalBalance {
  * and look for a credits/balance request, then update the path below.
  */
 export async function fetchModalBalance(): Promise<ModalBalance | null> {
-  const token = process.env.MODAL_TOKEN
-  if (!token) {
-    console.warn('MODAL_TOKEN not set — skipping Modal balance fetch')
+  const tokenId = process.env.MODAL_TOKEN_ID
+  const tokenSecret = process.env.MODAL_TOKEN_SECRET
+
+  if (!tokenId || !tokenSecret) {
+    console.warn('MODAL_TOKEN_ID / MODAL_TOKEN_SECRET not set — skipping Modal balance fetch')
     return null
   }
 
+  const basicAuth = Buffer.from(`${tokenId}:${tokenSecret}`).toString('base64')
+
   const res = await fetch('https://api.modal.com/v1/workspaces/current', {
-    headers: { Authorization: `Token ${token}` },
+    headers: { Authorization: `Basic ${basicAuth}` },
   })
 
   if (!res.ok) {
     throw new Error(`Modal API error: ${res.status}`)
   }
 
-  const data = await res.json()
+  const text = await res.text()
+  if (!text) {
+    console.warn(`Modal API returned empty body for ${res.url} — endpoint may need updating`)
+    return { balance: 0, raw: null }
+  }
+  const data = JSON.parse(text)
+  console.log('[modal] raw response:', JSON.stringify(data))
 
-  // Adapt to actual response shape — inspect `raw` on first run and update this
+  // Adapt to actual response shape — inspect the log above on first run and update this
   const balance = Number(
     data?.credits ?? data?.balance ?? data?.credit_balance ?? data?.data?.credits ?? 0
   )

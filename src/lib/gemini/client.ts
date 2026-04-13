@@ -33,14 +33,13 @@ export async function probeGeminiQuota(): Promise<GeminiQuotaResult | null> {
   )
 
   if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`Gemini countTokens error: ${res.status} ${text}`)
+    throw new Error(`Gemini countTokens error: ${res.status}`)
   }
 
   const data = await res.json()
 
-  const remaining = Number(res.headers.get('x-ratelimit-remaining-tokens') ?? 0)
-  const limit = Number(res.headers.get('x-ratelimit-limit-tokens') ?? 1)
+  const remaining = Math.max(0, Number(res.headers.get('x-ratelimit-remaining-tokens') ?? 0) || 0)
+  const limit = Math.max(1, Number(res.headers.get('x-ratelimit-limit-tokens') ?? 1) || 1)
 
   return {
     remainingTokensPerMinute: remaining,

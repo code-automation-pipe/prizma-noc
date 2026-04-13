@@ -1,4 +1,5 @@
 import {
+  bigint,
   boolean,
   integer,
   numeric,
@@ -11,7 +12,7 @@ import {
 export const stores = pgTable('stores', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
-  shop_id: integer('shop_id').notNull().unique(),
+  shop_id: bigint('shop_id', { mode: 'number' }).notNull().unique(),
   outlook_email: text('outlook_email').notNull(),
   outlook_credentials: text('outlook_credentials').notNull(), // AES-256-GCM encrypted JSON
   draft_alert_threshold: integer('draft_alert_threshold').notNull().default(10),
@@ -55,7 +56,7 @@ export const triggered_alerts = pgTable('triggered_alerts', {
 export const api_ledger = pgTable('api_ledger', {
   id: uuid('id').primaryKey().defaultRandom(),
   service: text('service').notNull(), // gemini | tmapi | modal
-  entry_type: text('entry_type').notNull(), // topup | spend
+  entry_type: text('entry_type').notNull(), // topup | spend | balance_snapshot
   amount: numeric('amount').notNull(), // USD, always positive
   note: text('note'),
   created_at: timestamp('created_at').notNull().defaultNow(),

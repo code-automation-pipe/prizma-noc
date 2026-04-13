@@ -46,3 +46,11 @@ export async function logOxylabsUsage(data: {
 }): Promise<void> {
   await ingestEvents([{ _time: new Date().toISOString(), type: 'oxylabs_usage', ...data }])
 }
+
+export async function logApiBalance(data: {
+  service: string
+  balance: number
+  quota_health?: number
+}): Promise<void> {
+  await ingestEvents([{ _time: new Date().toISOString(), type: 'api_balance', ...data }])
+}

@@ -18,7 +18,6 @@ export async function GET() {
       .where(eq(etsy_messages.is_read, false))
       .groupBy(etsy_messages.store_id),
     db.query.triggered_alerts.findMany({
-      with: { rule_id: true } as Record<string, unknown>,
       orderBy: desc(triggered_alerts.triggered_at),
       limit: 50,
     }),
@@ -42,18 +41,30 @@ export async function GET() {
     let balance = 0
     let cumSpend = 0
     let todaySpend = 0
-    for (const e of serviceEntries) {
-      const amt = Number(e.amount)
-      if (e.entry_type === 'topup') {
-        balance += amt
-      } else {
-        balance -= amt
-        cumSpend += amt
-        if (new Date(e.created_at).toDateString() === todayStr) {
-          todaySpend += amt
-        }
+
+    // Latest balance_snapshot wins — use it as the authoritative balance
+    const snapshots = serviceEntries
+      .filter((e) => e.entry_type === 'balance_snapshot')
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+    if (snapshots.length > 0) {
+      balance = Number(snapshots[0].amount)
+    } else {
+      for (const e of serviceEntries) {
+        const amt = Number(e.amount)
+        if (e.entry_type === 'topup') balance += amt
+        else if (e.entry_type === 'spend') balance -= amt
       }
     }
+
+    for (const e of serviceEntries) {
+      if (e.entry_type === 'spend') {
+        const amt = Number(e.amount)
+        cumSpend += amt
+        if (new Date(e.created_at).toDateString() === todayStr) todaySpend += amt
+      }
+    }
+
     balances[service] = balance
     dailySpend[service] = todaySpend
     cumulativeSpend[service] = cumSpend

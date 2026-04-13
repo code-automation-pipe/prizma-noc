@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/fetch-oxylabs",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/fetch-api-balances",
+      "schedule": "0 */6 * * *"
     }
   ]
 }

@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query'
 import type { DashboardData } from '@/types'
 import { TopBar } from './TopBar'
+import { SummaryStats } from './SummaryStats'
 import { ApiWallet } from './ApiWallet'
 import { StoreOverview } from './StoreOverview'
 import { MessagesFeed } from './MessagesFeed'
@@ -44,10 +45,11 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
         lastRefreshed={dataUpdatedAt ? new Date(dataUpdatedAt).toISOString() : data.last_refreshed}
         onRefresh={() => refetch()}
       />
+      <SummaryStats data={data} />
       <ApiWallet ledger={data.ledger} />
       <StoreOverview stores={data.stores} />
       <MessagesFeed stores={data.stores} />
-      <GraphsSection />
+      <GraphsSection storeNames={data.stores.map((s) => s.name)} />
       <AlertsFeed alerts={data.recent_alerts} />
     </div>
   )

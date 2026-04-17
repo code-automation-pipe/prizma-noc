@@ -1,23 +1,29 @@
+import { type NextRequest } from 'next/server'
 import { queryAxiom, normalizeAxiomResult, DATASET } from '@/lib/axiom/client'
 
-export const revalidate = 300
+export const dynamic = 'force-dynamic'
 
-export async function GET() {
+function parseDays(req: NextRequest, def: number): number {
+  const raw = req.nextUrl.searchParams.get('days')
+  const n = raw ? parseInt(raw, 10) : def
+  return Number.isFinite(n) ? Math.min(60, Math.max(7, n)) : def
+}
+
+export async function GET(request: NextRequest) {
+  const days = parseDays(request, 30)
   try {
     const apl = `
 ['${DATASET}']
 | where type == 'draft_snapshot'
-| where _time > ago(7d)
-| summarize draft_count = sum(draft_count) by bin(_time, 1h), shop_id, store_name
+| where _time > ago(${days}d)
+| summarize draft_count = avg(draft_count) by bin(_time, 1d), store_name
 | order by _time asc
     `.trim()
 
     const result = await queryAxiom(apl)
-    const rows = normalizeAxiomResult(result)
-
-    return Response.json(rows)
+    return Response.json(normalizeAxiomResult(result))
   } catch (err) {
     console.error('[charts/drafts]', err)
-    return Response.json([], { status: 200 }) // Return empty array so chart renders gracefully
+    return Response.json([])
   }
 }

@@ -24,22 +24,27 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
 
   if (isLoading && !data) {
     return (
-      <div className="flex items-center justify-center min-h-screen text-muted-foreground">
-        Loading dashboard…
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-[10px] font-mono tracking-[0.25em] uppercase text-muted-foreground animate-pulse">
+          Loading…
+        </p>
       </div>
     )
   }
 
   if (!data) {
     return (
-      <div className="flex items-center justify-center min-h-screen text-destructive">
-        Failed to load dashboard. Check your environment variables.
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center space-y-1">
+          <p className="text-xs font-mono text-destructive">✗ Failed to load dashboard</p>
+          <p className="text-[10px] font-mono text-muted-foreground">Check your environment variables.</p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col gap-6 p-6 max-w-screen-2xl mx-auto">
+    <div className="flex flex-col gap-5 p-6 max-w-screen-2xl mx-auto">
       <TopBar
         stores={data.stores}
         lastRefreshed={dataUpdatedAt ? new Date(dataUpdatedAt).toISOString() : data.last_refreshed}

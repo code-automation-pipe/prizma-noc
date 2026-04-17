@@ -4,8 +4,6 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Plus, RefreshCw } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -30,16 +28,17 @@ interface ApiWalletProps {
 }
 
 const SERVICES = [
-  { key: 'oxylabs', label: 'OxyLabs', isLive: false, noBalance: true, displayMode: 'usd' as const },
-  { key: 'gemini', label: 'Google AI Studio', isLive: true, noBalance: false, displayMode: 'status' as const },
-  { key: 'tmapi', label: 'TMAPI / 1688', isLive: false, noBalance: false, displayMode: 'usd' as const },
+  { key: 'oxylabs', label: 'OxyLabs', isLive: true, noBalance: true, displayMode: 'usd' as const },
+  { key: 'gemini', label: 'Google AI Studio', isLive: true, noBalance: false, displayMode: 'gemini' as const },
+  { key: 'tmapi', label: 'TMAPI / 1688', isLive: true, noBalance: false, displayMode: 'usd' as const },
   { key: 'modal', label: 'Modal (GPU)', isLive: false, noBalance: false, displayMode: 'usd' as const },
+  { key: 'axiom', label: 'Axiom', isLive: true, noBalance: false, displayMode: 'usd' as const },
 ] as const
 
 export function ApiWallet({ ledger }: ApiWalletProps) {
   const [open, setOpen] = useState(false)
-  const [service, setService] = useState<'gemini' | 'tmapi' | 'modal'>('gemini')
-  const [entryType, setEntryType] = useState<'topup' | 'spend'>('spend')
+  const [service, setService] = useState<'gemini' | 'tmapi' | 'modal' | 'axiom'>('gemini')
+  const [entryType, setEntryType] = useState<'topup' | 'free_credit' | 'spend'>('spend')
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
 
@@ -80,141 +79,233 @@ export function ApiWallet({ ledger }: ApiWalletProps) {
   return (
     <section>
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-lg font-semibold">API Wallet</h2>
+        <h2 className="text-[10px] font-mono tracking-[0.2em] uppercase text-muted-foreground">
+          API Wallet
+        </h2>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => refreshMutation.mutate()}
             disabled={refreshMutation.isPending}
-            className="inline-flex items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-mono text-muted-foreground shadow-sm hover:bg-accent hover:text-accent-foreground disabled:opacity-50 transition-colors"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-3 w-3 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
             {refreshMutation.isPending ? 'Fetching…' : 'Fetch Balances'}
           </button>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger
-            className="inline-flex items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground"
-            render={<button type="button" />}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add Entry
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Log Ledger Entry</DialogTitle>
-            </DialogHeader>
-            <div className="flex flex-col gap-4 mt-2">
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium">Service</label>
-                <Select value={service} onValueChange={((v: string) => setService(v as typeof service)) as SelectOnChange}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="gemini">Google AI Studio</SelectItem>
-                    <SelectItem value="tmapi">TMAPI / 1688</SelectItem>
-                    <SelectItem value="modal">Modal (GPU)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium">Type</label>
-                <Select
-                  value={entryType}
-                  onValueChange={((v: string) => setEntryType(v as typeof entryType)) as SelectOnChange}
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger
+              className="inline-flex items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 py-1.5 text-xs font-mono text-muted-foreground shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+              render={<button type="button" />}
+            >
+              <Plus className="h-3 w-3" />
+              Add Entry
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle className="font-mono text-sm tracking-wide">Log Ledger Entry</DialogTitle>
+              </DialogHeader>
+              <div className="flex flex-col gap-4 mt-2">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-mono tracking-[0.15em] uppercase text-muted-foreground">Service</label>
+                  <Select value={service} onValueChange={((v: string) => setService(v as typeof service)) as SelectOnChange}>
+                    <SelectTrigger className="font-mono text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="gemini">Google AI Studio</SelectItem>
+                      <SelectItem value="tmapi">TMAPI / 1688</SelectItem>
+                      <SelectItem value="modal">Modal (GPU)</SelectItem>
+                      <SelectItem value="axiom">Axiom</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-mono tracking-[0.15em] uppercase text-muted-foreground">Type</label>
+                  <Select
+                    value={entryType}
+                    onValueChange={((v: string) => setEntryType(v as typeof entryType)) as SelectOnChange}
+                  >
+                    <SelectTrigger className="font-mono text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="topup">Top-up (paid)</SelectItem>
+                      <SelectItem value="free_credit">Free Credit</SelectItem>
+                      <SelectItem value="spend">Spend</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-mono tracking-[0.15em] uppercase text-muted-foreground">Amount (USD)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm font-mono shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-mono tracking-[0.15em] uppercase text-muted-foreground">Note (optional)</label>
+                  <input
+                    type="text"
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm font-mono shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    placeholder="e.g. Monthly topup"
+                  />
+                </div>
+                <Button
+                  onClick={() => mutation.mutate()}
+                  disabled={!amount || Number(amount) <= 0 || mutation.isPending}
+                  className="font-mono text-sm"
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="topup">Top-up</SelectItem>
-                    <SelectItem value="spend">Spend</SelectItem>
-                  </SelectContent>
-                </Select>
+                  {mutation.isPending ? 'Saving…' : 'Save Entry'}
+                </Button>
               </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium">Amount (USD)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                  placeholder="0.00"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium">Note (optional)</label>
-                <input
-                  type="text"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-                  placeholder="e.g. Monthly topup"
-                />
-              </div>
-              <Button
-                onClick={() => mutation.mutate()}
-                disabled={!amount || Number(amount) <= 0 || mutation.isPending}
-              >
-                {mutation.isPending ? 'Saving…' : 'Save Entry'}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         {SERVICES.map((svc) => {
           const balance = svc.noBalance ? null : (ledger.balances[svc.key] ?? null)
+          const totalCredits = ledger.credits?.[svc.key] ?? null
           const dailySpend = ledger.daily_spend[svc.key] ?? 0
           const cumSpend = ledger.cumulative_spend[svc.key] ?? 0
-          const isStatus = svc.displayMode === 'status'
-          // status mode: balance===1 alive, balance===0 error, null = never probed
-          const isLow = !isStatus && balance !== null && balance < 10
+          const isGemini = svc.displayMode === 'gemini'
+          const quotaPct = isGemini ? (ledger.quota_percent?.['gemini'] ?? null) : null
+          const monthlyReqs = svc.noBalance ? (ledger.monthly_requests?.[svc.key] ?? null) : null
+          const planLimit = svc.noBalance ? (ledger.plan_limits?.[svc.key] ?? null) : null
+          const usedPct = planLimit && monthlyReqs !== null ? Math.round((monthlyReqs / planLimit) * 100) : null
+          const isLow = !isGemini && balance !== null && balance < 10
 
           return (
-            <Card key={svc.key} className={isLow ? 'border-destructive' : ''}>
-              <CardHeader className="pb-2 pt-4 px-4">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-medium">{svc.label}</CardTitle>
-                  <Badge variant={svc.isLive ? 'default' : 'secondary'} className="text-xs">
-                    {svc.isLive ? 'Live' : 'Manual'}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="px-4 pb-4 flex flex-col gap-1">
-                {isStatus ? (
-                  balance === null
-                    ? <p className="text-sm text-muted-foreground">Not probed yet</p>
-                    : balance > 1
-                      ? <p className={`text-2xl font-bold ${balance < 20 ? 'text-destructive' : 'text-green-600'}`}>
-                          {Math.round(balance)}%
-                        </p>
-                      : <p className={`text-xl font-bold ${balance === 1 ? 'text-green-600' : 'text-destructive'}`}>
-                          {balance === 1 ? 'Active' : 'Error'}
-                        </p>
-                ) : balance !== null ? (
-                  <p className={`text-2xl font-bold ${isLow ? 'text-destructive' : ''}`}>
-                    ${balance.toFixed(2)}
-                  </p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No balance endpoint</p>
-                )}
-                <div className="text-xs text-muted-foreground space-y-0.5">
-                  {isStatus ? (
-                    <p>{balance !== null && balance > 1 ? 'Quota remaining this minute' : 'API reachability probe'}</p>
+            <div
+              key={svc.key}
+              className={`rounded-lg border bg-card p-4 flex flex-col gap-3 transition-colors ${
+                isLow ? 'border-destructive/40' : 'border-border'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-1">
+                <p className="text-[10px] font-mono tracking-[0.1em] uppercase text-muted-foreground leading-tight">
+                  {svc.label}
+                </p>
+                <span className={`inline-flex items-center gap-1 text-[9px] font-mono shrink-0 mt-0.5 ${
+                  svc.isLive
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-muted-foreground/60'
+                }`}>
+                  <span className={`size-1.5 rounded-full ${
+                    svc.isLive ? 'bg-emerald-500' : 'bg-muted-foreground/40'
+                  }`} />
+                  {svc.isLive ? 'live' : 'manual'}
+                </span>
+              </div>
+
+              {isGemini ? (
+                <div className="flex flex-col gap-1">
+                  {quotaPct === null ? (
+                    <p className="text-2xl font-mono text-muted-foreground">—</p>
+                  ) : quotaPct > 1 ? (
+                    <p className={`text-2xl font-mono font-bold tabular-nums ${
+                      quotaPct < 20 ? 'text-destructive' : 'text-foreground'
+                    }`}>
+                      {Math.round(quotaPct)}%
+                    </p>
                   ) : (
-                    <>
-                      <p>Today: ${dailySpend.toFixed(2)}</p>
-                      <p>Cumulative: ${cumSpend.toFixed(2)}</p>
-                    </>
+                    <p className={`text-xl font-mono font-bold ${
+                      quotaPct === 1
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-destructive'
+                    }`}>
+                      {quotaPct === 1 ? 'Active' : 'Error'}
+                    </p>
                   )}
+                  <div className="space-y-0.5">
+                    <p className="text-[10px] text-muted-foreground">
+                      {quotaPct !== null && quotaPct > 1 ? 'quota remaining' : 'AI Studio key'}
+                    </p>
+                    {totalCredits !== null ? (
+                      <p className="text-[10px] font-mono text-muted-foreground">
+                        ${cumSpend.toFixed(4)} / ${totalCredits.toFixed(2)}
+                      </p>
+                    ) : (
+                      balance !== null && (
+                        <p className="text-[10px] font-mono text-muted-foreground">bal: ${balance.toFixed(2)}</p>
+                      )
+                    )}
+                    <p className="text-[10px] font-mono text-muted-foreground">
+                      today: ${dailySpend.toFixed(4)}
+                    </p>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
+              ) : svc.noBalance ? (
+                <div className="flex flex-col gap-1">
+                  {monthlyReqs !== null ? (
+                    <p className={`text-2xl font-mono font-bold tabular-nums ${
+                      usedPct !== null && usedPct > 80
+                        ? 'text-destructive'
+                        : usedPct !== null && usedPct > 60
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : 'text-foreground'
+                    }`}>
+                      {monthlyReqs.toLocaleString()}
+                    </p>
+                  ) : (
+                    <p className="text-2xl font-mono text-muted-foreground">—</p>
+                  )}
+                  <div className="space-y-0.5">
+                    {monthlyReqs !== null && planLimit !== null ? (
+                      <>
+                        <p className="text-[10px] font-mono text-muted-foreground">
+                          {usedPct}% of {planLimit.toLocaleString()}
+                        </p>
+                        <p className="text-[10px] font-mono text-muted-foreground">
+                          {(planLimit - monthlyReqs).toLocaleString()} remaining
+                        </p>
+                      </>
+                    ) : monthlyReqs !== null ? (
+                      <p className="text-[10px] text-muted-foreground">req / month</p>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground">press fetch to load</p>
+                    )}
+                  </div>
+                </div>
+              ) : svc.key === 'axiom' ? (
+                <div className="flex flex-col gap-1">
+                  <p className="text-2xl font-mono font-bold tabular-nums">
+                    {balance !== null ? Number(balance).toLocaleString() : '—'}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {balance !== null ? 'events logged' : 'press fetch to load'}
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  <p className={`text-2xl font-mono font-bold tabular-nums ${
+                    isLow ? 'text-destructive' : 'text-foreground'
+                  }`}>
+                    ${(balance ?? 0).toFixed(2)}
+                  </p>
+                  <div className="space-y-0.5">
+                    {totalCredits !== null ? (
+                      <p className="text-[10px] font-mono text-muted-foreground">
+                        ${cumSpend.toFixed(2)} / ${totalCredits.toFixed(2)}
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground">no credits logged</p>
+                    )}
+                    <p className="text-[10px] font-mono text-muted-foreground">
+                      today: ${dailySpend.toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
           )
         })}
       </div>

@@ -14,31 +14,40 @@ export function SummaryStats({ data }: SummaryStatsProps) {
     {
       label: 'Not Processed',
       value: totalDrafts.toLocaleString(),
-      className: totalDrafts === 0 ? 'text-destructive' : '',
+      valueClass: totalDrafts === 0 ? 'text-destructive' : 'text-foreground',
+      dot: totalDrafts === 0 ? 'bg-destructive' : 'bg-emerald-500',
     },
     {
       label: 'Published Today',
       value: totalPublished.toLocaleString(),
-      className: totalPublished > 0 ? 'text-green-600 dark:text-green-400' : 'text-destructive',
+      valueClass: totalPublished > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive',
+      dot: totalPublished > 0 ? 'bg-emerald-500' : 'bg-destructive',
     },
     {
       label: 'Unread Messages',
       value: totalUnread.toLocaleString(),
-      className: totalUnread > 0 ? 'text-amber-600 dark:text-amber-400' : '',
+      valueClass: totalUnread > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-foreground',
+      dot: totalUnread > 0 ? 'bg-amber-500' : 'bg-muted-foreground/30',
     },
     {
       label: 'API Spend Today',
       value: `$${totalSpendToday.toFixed(4)}`,
-      className: '',
+      valueClass: 'text-foreground',
+      dot: 'bg-muted-foreground/30',
     },
   ]
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-border rounded-lg overflow-hidden border border-border">
       {stats.map((stat) => (
-        <div key={stat.label} className="rounded-lg border bg-card px-4 py-3">
-          <p className="text-xs text-muted-foreground">{stat.label}</p>
-          <p className={`text-2xl font-bold mt-0.5 tabular-nums ${stat.className}`}>
+        <div key={stat.label} className="bg-card px-5 py-4 flex flex-col gap-2">
+          <div className="flex items-center gap-1.5">
+            <span className={`inline-block size-1.5 rounded-full shrink-0 ${stat.dot}`} />
+            <p className="text-[10px] font-mono tracking-[0.18em] uppercase text-muted-foreground">
+              {stat.label}
+            </p>
+          </div>
+          <p className={`text-3xl font-mono font-bold tabular-nums leading-none tracking-tight ${stat.valueClass}`}>
             {stat.value}
           </p>
         </div>

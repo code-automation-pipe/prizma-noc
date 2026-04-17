@@ -29,14 +29,23 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="w-full max-w-sm space-y-6 rounded-xl border border-border bg-card p-8 shadow-sm">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Etsy Monitor</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Enter your access token to continue</p>
+      <div className="w-full max-w-[360px] px-8">
+        <div className="mb-10">
+          <p className="text-[10px] font-mono tracking-[0.3em] uppercase text-muted-foreground mb-2">
+            Ops Console
+          </p>
+          <h1 className="text-2xl font-mono font-bold tracking-tight text-foreground">
+            Etsy Monitor
+          </h1>
+          <div className="mt-4 h-px bg-border" />
         </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <label htmlFor="password" className="text-sm font-medium">
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-2">
+            <label
+              htmlFor="password"
+              className="text-[10px] font-mono tracking-[0.2em] uppercase text-muted-foreground"
+            >
               Access Token
             </label>
             <input
@@ -44,19 +53,26 @@ export default function LoginPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••••••••••"
+              placeholder="••••••••••••••••••••••"
               required
               autoComplete="current-password"
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+              className="w-full bg-transparent border-b border-input pb-2 text-sm font-mono focus:outline-none focus:border-foreground transition-colors placeholder:text-muted-foreground/30 text-foreground"
             />
           </div>
-          {error && <p className="text-sm text-destructive">{error}</p>}
+
+          {error && (
+            <p className="text-xs font-mono text-destructive">✗ {error}</p>
+          )}
+
           <button
             type="submit"
             disabled={loading || !password}
-            className="flex h-9 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            className="w-full text-sm font-mono font-medium py-2.5 px-4 border border-foreground/20 hover:border-foreground hover:bg-foreground hover:text-background transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2 rounded-sm"
           >
-            {loading ? 'Signing in…' : 'Sign in'}
+            <span className="text-muted-foreground group-hover:text-inherit">
+              {loading ? '···' : '→'}
+            </span>
+            <span>{loading ? 'Authenticating' : 'Sign in'}</span>
           </button>
         </form>
       </div>

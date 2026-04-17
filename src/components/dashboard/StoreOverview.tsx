@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Badge } from '@/components/ui/badge'
+import Link from 'next/link'
 import {
   Table,
   TableBody,
@@ -19,23 +19,45 @@ interface StoreOverviewProps {
 
 const PAGE_SIZE = 20
 
-function HealthBadge({ health }: { health: StoreWithStatus['health'] }) {
-  const variants = {
-    healthy: 'default',
-    warning: 'secondary',
-    critical: 'destructive',
+function HealthIndicator({ health }: { health: StoreWithStatus['health'] }) {
+  const configs = {
+    healthy: {
+      dot: 'bg-emerald-500',
+      text: 'text-emerald-600 dark:text-emerald-400',
+      label: 'Healthy',
+    },
+    warning: {
+      dot: 'bg-amber-500',
+      text: 'text-amber-600 dark:text-amber-400',
+      label: 'Warning',
+    },
+    critical: {
+      dot: 'bg-destructive',
+      text: 'text-destructive',
+      label: 'Critical',
+    },
   } as const
-  return <Badge variant={variants[health]}>{health}</Badge>
+  const c = configs[health]
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-xs font-mono ${c.text}`}>
+      <span className={`size-1.5 rounded-full shrink-0 ${c.dot}`} />
+      {c.label}
+    </span>
+  )
 }
 
-function DraftBadge({ count, threshold }: { count: number; threshold: number }) {
-  const color =
+function DraftCount({ count, threshold }: { count: number; threshold: number }) {
+  const colorClass =
     count < threshold
-      ? 'text-destructive font-semibold'
+      ? 'text-destructive'
       : count < threshold + 5
-        ? 'text-yellow-600 font-semibold'
-        : 'text-green-600'
-  return <span className={color}>{count}</span>
+        ? 'text-amber-600 dark:text-amber-400'
+        : 'text-foreground'
+  return (
+    <span className={`font-mono tabular-nums text-sm font-medium ${colorClass}`}>
+      {count.toLocaleString()}
+    </span>
+  )
 }
 
 export function StoreOverview({ stores }: StoreOverviewProps) {
@@ -51,61 +73,109 @@ export function StoreOverview({ stores }: StoreOverviewProps) {
   return (
     <section>
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-lg font-semibold">Store Overview</h2>
-        <span className="text-sm text-muted-foreground">{filtered.length} stores</span>
+        <h2 className="text-[10px] font-mono tracking-[0.2em] uppercase text-muted-foreground">
+          Store Overview
+        </h2>
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] font-mono text-muted-foreground">
+            {filtered.length} stores
+          </span>
+          <input
+            type="text"
+            placeholder="Search…"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setPage(1)
+            }}
+            className="h-7 w-36 rounded-md border border-input bg-transparent px-2.5 text-xs font-mono shadow-sm focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/40"
+          />
+        </div>
       </div>
 
-      <div className="mb-3">
-        <input
-          type="text"
-          placeholder="Search stores…"
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value)
-            setPage(1)
-          }}
-          className="flex h-9 w-full max-w-xs rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
-        />
-      </div>
-
-      <div className="rounded-md border">
+      <div className="rounded-lg border border-border overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead>Store</TableHead>
-              <TableHead className="text-right">Drafts</TableHead>
-              <TableHead className="text-right">Published Today</TableHead>
-              <TableHead className="text-right">Unread Messages</TableHead>
-              <TableHead>Health</TableHead>
+            <TableRow className="hover:bg-transparent border-b border-border bg-muted/30">
+              <TableHead className="text-[10px] font-mono tracking-[0.15em] uppercase text-muted-foreground py-2.5">
+                Store
+              </TableHead>
+              <TableHead className="text-right text-[10px] font-mono tracking-[0.15em] uppercase text-muted-foreground py-2.5">
+                Not Processed
+              </TableHead>
+              <TableHead className="text-right text-[10px] font-mono tracking-[0.15em] uppercase text-muted-foreground py-2.5">
+                Published Today
+              </TableHead>
+              <TableHead className="text-right text-[10px] font-mono tracking-[0.15em] uppercase text-muted-foreground py-2.5">
+                Unread
+              </TableHead>
+              <TableHead className="text-[10px] font-mono tracking-[0.15em] uppercase text-muted-foreground py-2.5">
+                Email
+              </TableHead>
+              <TableHead className="text-[10px] font-mono tracking-[0.15em] uppercase text-muted-foreground py-2.5">
+                Health
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {paginated.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                <TableCell
+                  colSpan={6}
+                  className="text-center text-xs font-mono text-muted-foreground py-10"
+                >
                   No stores found
                 </TableCell>
               </TableRow>
             ) : (
               paginated.map((store) => (
-                <TableRow key={store.id}>
-                  <TableCell className="font-medium">{store.name}</TableCell>
-                  <TableCell className="text-right">
-                    <DraftBadge
+                <TableRow
+                  key={store.id}
+                  className="border-b border-border/50 last:border-0 hover:bg-muted/20 transition-colors"
+                >
+                  <TableCell className="font-medium text-sm py-3">{store.name}</TableCell>
+                  <TableCell className="text-right py-3">
+                    <DraftCount
                       count={store.last_draft_count}
                       threshold={store.draft_alert_threshold}
                     />
                   </TableCell>
-                  <TableCell className="text-right">{store.published_today}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right py-3">
+                    <span className={`font-mono tabular-nums text-sm ${
+                      store.published_today === 0
+                        ? 'text-destructive'
+                        : 'text-foreground'
+                    }`}>
+                      {store.published_today}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right py-3">
                     {store.unread_message_count > 0 ? (
-                      <Badge variant="destructive">{store.unread_message_count}</Badge>
+                      <span className="font-mono text-sm font-semibold text-amber-600 dark:text-amber-400">
+                        {store.unread_message_count}
+                      </span>
                     ) : (
-                      <span className="text-muted-foreground">0</span>
+                      <span className="font-mono text-sm text-muted-foreground">0</span>
                     )}
                   </TableCell>
-                  <TableCell>
-                    <HealthBadge health={store.health} />
+                  <TableCell className="py-3">
+                    {store.email_screener_connected ? (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-mono text-emerald-600 dark:text-emerald-400">
+                        <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
+                        Connected
+                      </span>
+                    ) : (
+                      <Link
+                        href="/settings"
+                        className="inline-flex items-center gap-1.5 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <span className="size-1.5 rounded-full bg-muted-foreground/30 shrink-0" />
+                        Set up →
+                      </Link>
+                    )}
+                  </TableCell>
+                  <TableCell className="py-3">
+                    <HealthIndicator health={store.health} />
                   </TableCell>
                 </TableRow>
               ))
@@ -115,8 +185,8 @@ export function StoreOverview({ stores }: StoreOverviewProps) {
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-3 text-sm text-muted-foreground">
-          <span>
+        <div className="flex items-center justify-between mt-3">
+          <span className="text-[10px] font-mono text-muted-foreground">
             Page {page} of {totalPages}
           </span>
           <div className="flex gap-2">
@@ -125,6 +195,7 @@ export function StoreOverview({ stores }: StoreOverviewProps) {
               size="sm"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
+              className="text-xs font-mono"
             >
               Previous
             </Button>
@@ -133,6 +204,7 @@ export function StoreOverview({ stores }: StoreOverviewProps) {
               size="sm"
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
+              className="text-xs font-mono"
             >
               Next
             </Button>

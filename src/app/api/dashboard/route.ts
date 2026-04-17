@@ -1,7 +1,7 @@
 import { count, desc, eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { api_ledger, etsy_messages, stores, triggered_alerts } from '@/lib/db/schema'
-import { getPublishedTodayPerShop, getDraftStatePerShop, getPipelineSpend, getDraftCountsPerShop } from '@/lib/db/workers-db'
+import { getPublishedTodayPerShop, getPipelineSpend } from '@/lib/db/workers-db'
 import { decryptCredentials } from '@/lib/crypto/credentials'
 import { computeStoreHealth } from '@/lib/health'
 import type { DashboardData, LedgerSummary, StoreWithStatus } from '@/types'
@@ -9,7 +9,7 @@ import type { DashboardData, LedgerSummary, StoreWithStatus } from '@/types'
 export const revalidate = 60
 
 export async function GET() {
-  const [allStores, unreadCounts, recentAlerts, ledgerEntries, pipelineSpend, publishedCounts, draftStateCounts, productCounts] = await Promise.all([
+  const [allStores, unreadCounts, recentAlerts, ledgerEntries, pipelineSpend, publishedCounts] = await Promise.all([
     db.query.stores.findMany({
       orderBy: (s, { asc }) => asc(s.name),
     }),
@@ -27,8 +27,6 @@ export async function GET() {
     }),
     getPipelineSpend().catch((e) => { console.error('[workers-db] getPipelineSpend failed:', e); return null }),
     getPublishedTodayPerShop().catch((e) => { console.error('[workers-db] getPublishedTodayPerShop failed:', e); return [] }),
-    getDraftStatePerShop().catch((e) => { console.error('[workers-db] getDraftStatePerShop failed:', e); return [] }),
-    getDraftCountsPerShop().catch((e) => { console.error('[workers-db] getDraftCountsPerShop failed:', e); return [] }),
   ])
 
   // Build unread map
@@ -118,20 +116,14 @@ export async function GET() {
     plan_limits: planLimits,
   }
 
-  // Build published/draft-state maps (products table may not exist — fail silently)
-  const publishedMap    = new Map(publishedCounts.map((p) => [p.shop_id, p.draft_count]))
-  const productCountMap = new Map(productCounts.map((p) => [p.shop_id, p.draft_count]))
-  const draftStateMap   = new Map(draftStateCounts.map((d) => [d.shop_id, d.draft_count]))
+  const publishedMap = new Map(publishedCounts.map((p) => [p.shop_id, p.draft_count]))
 
   // Build store status list
   const storeList: StoreWithStatus[] = allStores.map((s) => {
     const unreadCount      = unreadMap.get(s.id) ?? 0
-    const notProcessed     = s.last_draft_count  // pipeline writes this directly
-    const publishedToday   = publishedMap.get(s.shop_id) ?? 0
-    const totalNotUploaded = productCountMap.get(s.shop_id) ?? 0
-    const inPipeline       = draftStateMap.get(s.shop_id) ?? 0
-    const draftsState      = Math.max(0, totalNotUploaded - inPipeline)
-    const draftsMadeToday  = 0  // not tracked without products table
+    const notProcessed   = s.last_draft_count  // pipeline writes this directly
+    const publishedToday = publishedMap.get(s.shop_id) ?? 0
+    const draftsMadeToday = 0
 
     // Check if email screener credentials are configured (OAuth2 or app password)
     let emailScreenerConnected = false
@@ -155,9 +147,8 @@ export async function GET() {
       unread_message_count: unreadCount,
       published_today: publishedToday,
       drafts_made_today: draftsMadeToday,
-      drafts_state: draftsState,
       email_screener_connected: emailScreenerConnected,
-      health: computeStoreHealth(emailScreenerConnected),
+      health: computeStoreHealth(emailScreenerConnected, notProcessed ?? 0, s.draft_alert_threshold),
     }
   })
 

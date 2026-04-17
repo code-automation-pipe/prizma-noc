@@ -4,6 +4,7 @@ export const maxDuration = 30
 import { probeGeminiQuota } from '@/lib/gemini/client'
 import { fetchGeminiQuotaUsage } from '@/lib/gemini/quota-client'
 import { fetchTmapiBalance } from '@/lib/tmapi/client'
+import { fetchAxiomUsage } from '@/lib/axiom/balance'
 import { logApiBalance } from '@/lib/axiom/events'
 import { db } from '@/lib/db'
 import { api_ledger } from '@/lib/db/schema'
@@ -30,8 +31,11 @@ export async function GET(request: Request) {
       })
       apiBalances.set('gemini', 0)
     } else {
-      // Try to get real quota % from Cloud Monitoring (requires service account)
+      // Try to get real quota % from Cloud Monitoring (requires service account + Vertex AI)
+      // NOTE: AI Studio API keys do NOT expose quota metrics via Cloud Monitoring —
+      //       only Vertex AI does. If this returns null, alive probe is the fallback.
       const quota = await fetchGeminiQuotaUsage()
+
       if (quota) {
         // Store remaining % (0–100)
         console.log(`[gemini] quota ${quota.remainingPercent}% remaining`)
@@ -87,6 +91,22 @@ export async function GET(request: Request) {
     }
   } catch (err) {
     console.error('TMAPI balance fetch failed:', err)
+  }
+
+  // --- Axiom ---
+  try {
+    const axiom = await fetchAxiomUsage()
+    if (axiom) {
+      await db.insert(api_ledger).values({
+        service: 'axiom',
+        entry_type: 'balance_snapshot',
+        amount: String(axiom.totalEvents),
+        note: `${axiom.totalEvents.toLocaleString()} total events`,
+      })
+      apiBalances.set('axiom', axiom.totalEvents)
+    }
+  } catch (err) {
+    console.error('Axiom balance fetch failed:', err)
   }
 
   await evaluateAlerts({

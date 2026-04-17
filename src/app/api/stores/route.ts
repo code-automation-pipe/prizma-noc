@@ -2,7 +2,7 @@ import { asc } from 'drizzle-orm'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { stores } from '@/lib/db/schema'
-import { encryptCredentials } from '@/lib/crypto/credentials'
+import { encryptCredentials, decryptCredentials } from '@/lib/crypto/credentials'
 
 export const runtime = 'nodejs'
 
@@ -12,17 +12,25 @@ const CreateStoreSchema = z.object({
   outlook_email: z.string().email(),
   draft_alert_threshold: z.number().int().positive().default(10),
   outlook_credentials: z.object({
-    tenantId: z.string().min(1),
-    clientId: z.string().min(1),
-    clientSecret: z.string().min(1),
+    appPassword: z.string().min(1),
   }),
 })
 
 export async function GET() {
-  const result = await db.query.stores.findMany({
-    columns: { outlook_credentials: false },
+  const rows = await db.query.stores.findMany({
     orderBy: asc(stores.name),
   })
+
+  const result = rows.map(({ outlook_credentials, ...rest }) => {
+    let connected = false
+    try {
+      const creds = JSON.parse(decryptCredentials(outlook_credentials))
+      // Only OAuth2 refresh token counts as connected — app passwords are blocked by Microsoft
+      connected = typeof creds?.refreshToken === 'string' && creds.refreshToken.length > 0
+    } catch { /* malformed */ }
+    return { ...rest, connected }
+  })
+
   return Response.json(result)
 }
 

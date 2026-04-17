@@ -29,6 +29,7 @@ export const etsy_messages = pgTable('etsy_messages', {
   message_id: text('message_id').notNull().unique(), // Graph API message ID — dedup key
   sender_name: text('sender_name').notNull(),
   subject: text('subject').notNull(),
+  type: text('type').notNull().default('message'), // 'message' | 'order'
   received_at: timestamp('received_at').notNull(),
   is_read: boolean('is_read').notNull().default(false),
   created_at: timestamp('created_at').notNull().defaultNow(),

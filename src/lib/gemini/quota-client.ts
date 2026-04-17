@@ -1,37 +1,37 @@
 import { GoogleAuth } from 'google-auth-library'
 
 export interface GeminiQuotaUsage {
-  /** Remaining quota 0–100 (100 = fully available, 0 = exhausted) */
   remainingPercent: number
-  /** Raw tokens used in the current window */
   tokensUsed: number
-  /** Quota limit (tokens per minute) */
   tokensLimit: number
-  /** Quota metric name found */
   quotaMetric: string
 }
 
-/**
- * Queries Google Cloud Monitoring for Gemini token quota usage.
- *
- * Requires env vars:
- *   GOOGLE_SERVICE_ACCOUNT_JSON  — full JSON of a service account with roles/monitoring.viewer
- *   GOOGLE_CLOUD_PROJECT_ID      — GCP project ID that owns the Gemini API key
- */
-export async function fetchGeminiQuotaUsage(): Promise<GeminiQuotaUsage | null> {
-  const saJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
-  const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID
+// NOTE: Cloud Monitoring quota/allocation/usage metrics are NOT populated for
+// Google AI Studio API keys — only Vertex AI exposes generation quota data.
+// Quota % display is therefore only available when using a Vertex AI service account.
 
-  if (!saJson || !projectId) {
-    console.warn('[gemini-quota] GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_CLOUD_PROJECT_ID not set — skipping quota fetch')
-    return null
-  }
+type TimeSeries = {
+  metric: { labels: Record<string, string> }
+  resource: { labels: Record<string, string> }
+  points: Array<{ value: { doubleValue?: number; int64Value?: string } }>
+}
+
+type MonitoringResponse = { timeSeries?: TimeSeries[] }
+
+async function getGcpAccessToken(): Promise<{ token: string; projectId: string } | null> {
+  const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID
+  const saB64 = process.env.GOOGLE_SERVICE_ACCOUNT_B64
+  const saJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
+
+  if ((!saB64 && !saJson) || !projectId) return null
 
   let credentials: object
   try {
-    credentials = JSON.parse(saJson)
+    const raw = saB64 ? Buffer.from(saB64, 'base64').toString('utf-8') : saJson!
+    credentials = JSON.parse(raw)
   } catch {
-    console.error('[gemini-quota] Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON')
+    console.error('[gemini-quota] Failed to parse service account credentials')
     return null
   }
 
@@ -39,117 +39,117 @@ export async function fetchGeminiQuotaUsage(): Promise<GeminiQuotaUsage | null> 
     credentials,
     scopes: ['https://www.googleapis.com/auth/monitoring.read'],
   })
-
   const client = await auth.getClient()
   const tokenData = await client.getAccessToken()
-  const accessToken = tokenData.token
-  if (!accessToken) {
-    console.error('[gemini-quota] Failed to obtain access token')
+  if (!tokenData.token) return null
+
+  return { token: tokenData.token, projectId }
+}
+
+export async function fetchGeminiQuotaUsage(): Promise<GeminiQuotaUsage | null> {
+  const gcp = await getGcpAccessToken()
+  if (!gcp) {
+    console.warn('[gemini-quota] GOOGLE_SERVICE_ACCOUNT_B64 + GOOGLE_CLOUD_PROJECT_ID required — skipping')
     return null
   }
 
+  const { token, projectId } = gcp
+  const headers = { Authorization: `Bearer ${token}` }
   const now = new Date()
-  const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000)
 
-  // Fetch usage time series for generativelanguage.googleapis.com
-  const usageUrl = new URL(
-    `https://monitoring.googleapis.com/v3/projects/${projectId}/timeSeries`
+  const fetchSeries = async (metricType: string, start: Date): Promise<TimeSeries[]> => {
+    const url = new URL(`https://monitoring.googleapis.com/v3/projects/${projectId}/timeSeries`)
+    url.searchParams.set('filter', `metric.type="${metricType}"`)
+    url.searchParams.set('interval.startTime', start.toISOString())
+    url.searchParams.set('interval.endTime', now.toISOString())
+    const res = await fetch(url.toString(), { headers })
+    if (!res.ok) {
+      console.error(`[gemini-quota] ${metricType} failed: ${res.status}`)
+      return []
+    }
+    const data: MonitoringResponse = await res.json()
+    return data.timeSeries ?? []
+  }
+
+  const GEMINI_SERVICES = ['generativelanguage.googleapis.com', 'aiplatform.googleapis.com']
+
+  // Try 24h first, fall back to 7d if no Gemini service found
+  let allUsage: TimeSeries[] = []
+  let limitSeries: TimeSeries[] = []
+  let windowLabel = '24h'
+
+  for (const [label, start] of [['24h', new Date(now.getTime() - 24 * 60 * 60 * 1000)], ['7d', new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)]] as [string, Date][]) {
+    const [rate, alloc, limits] = await Promise.all([
+      fetchSeries('serviceruntime.googleapis.com/quota/rate/net_usage', start),
+      fetchSeries('serviceruntime.googleapis.com/quota/allocation/usage', start),
+      fetchSeries('serviceruntime.googleapis.com/quota/limit', start),
+    ])
+    const usage = [...rate, ...alloc]
+    const hasGemini = GEMINI_SERVICES.some(svc => usage.some(ts => ts.resource?.labels?.service === svc))
+    if (hasGemini) {
+      allUsage = usage
+      limitSeries = limits
+      windowLabel = label
+      break
+    }
+    // on first pass with no Gemini, continue to 7d
+  }
+
+  const usageServices = [...new Set(allUsage.map(ts => ts.resource?.labels?.service))]
+  console.log(`[gemini-quota] usage services (${windowLabel}):`, usageServices)
+
+  const matchedService = GEMINI_SERVICES.find(svc =>
+    allUsage.some(ts => ts.resource?.labels?.service === svc)
   )
-  usageUrl.searchParams.set(
-    'filter',
-    'metric.type="serviceruntime.googleapis.com/quota/rate/net_usage" AND resource.labels.service="generativelanguage.googleapis.com"'
-  )
-  usageUrl.searchParams.set('interval.startTime', fiveMinutesAgo.toISOString())
-  usageUrl.searchParams.set('interval.endTime', now.toISOString())
-  usageUrl.searchParams.set('aggregation.alignmentPeriod', '60s')
-  usageUrl.searchParams.set('aggregation.perSeriesAligner', 'ALIGN_RATE')
+  console.log('[gemini-quota] matched service:', matchedService ?? 'none')
 
-  const limitUrl = new URL(
-    `https://monitoring.googleapis.com/v3/projects/${projectId}/timeSeries`
-  )
-  limitUrl.searchParams.set(
-    'filter',
-    'metric.type="serviceruntime.googleapis.com/quota/limit" AND resource.labels.service="generativelanguage.googleapis.com"'
-  )
-  limitUrl.searchParams.set('interval.startTime', fiveMinutesAgo.toISOString())
-  limitUrl.searchParams.set('interval.endTime', now.toISOString())
-
-  const headers = { Authorization: `Bearer ${accessToken}` }
-
-  const [usageRes, limitRes] = await Promise.all([
-    fetch(usageUrl.toString(), { headers }),
-    fetch(limitUrl.toString(), { headers }),
-  ])
-
-  if (!usageRes.ok || !limitRes.ok) {
-    const errText = !usageRes.ok ? await usageRes.text() : await limitRes.text()
-    console.error('[gemini-quota] Monitoring API error:', errText.slice(0, 300))
+  if (!matchedService) {
+    console.warn('[gemini-quota] No Gemini quota data found in 24h or 7d windows')
     return null
   }
 
-  const [usageData, limitData] = await Promise.all([usageRes.json(), limitRes.json()])
+  const geminiUsage = allUsage.filter(ts => ts.resource?.labels?.service === matchedService)
+  const geminiLimit = limitSeries.filter(ts => ts.resource?.labels?.service === matchedService)
 
-  // Log all available quota metrics so we can pick the right one
-  const usageMetrics = (usageData.timeSeries ?? []).map(
-    (ts: { metric: { labels: Record<string, string> } }) => ts.metric?.labels?.quota_metric
-  )
-  const limitMetrics = (limitData.timeSeries ?? []).map(
-    (ts: { metric: { labels: Record<string, string> } }) => ts.metric?.labels?.quota_metric
-  )
-  console.log('[gemini-quota] available usage metrics:', usageMetrics)
-  console.log('[gemini-quota] available limit metrics:', limitMetrics)
+  const preferTokens = (name: string) => {
+    if (name?.includes('token')) return 0
+    if (name?.includes('generate') || name?.includes('predict')) return 1
+    if (name?.includes('request') && !name?.includes('resource_management')) return 2
+    return 99 // deprioritize resource_management and other non-generation metrics
+  }
 
-  // Prefer a token-based quota metric over request-based
-  const preferTokens = (name: string) =>
-    name?.includes('token') ? 0 : name?.includes('request') ? 1 : 2
+  const topUsage = [...geminiUsage].sort(
+    (a, b) => preferTokens(a.metric?.labels?.quota_metric) - preferTokens(b.metric?.labels?.quota_metric)
+  )[0]
 
-  const usageSeries: Array<{
-    metric: { labels: Record<string, string> }
-    points: Array<{ interval: unknown; value: { doubleValue?: number; int64Value?: string } }>
-  }> = (usageData.timeSeries ?? []).sort(
-    (
-      a: { metric: { labels: Record<string, string> } },
-      b: { metric: { labels: Record<string, string> } }
-    ) =>
-      preferTokens(a.metric?.labels?.quota_metric) - preferTokens(b.metric?.labels?.quota_metric)
-  )
+  const topLimit = [...geminiLimit].sort(
+    (a, b) => preferTokens(a.metric?.labels?.quota_metric) - preferTokens(b.metric?.labels?.quota_metric)
+  )[0]
 
-  const limitSeries: Array<{
-    metric: { labels: Record<string, string> }
-    points: Array<{ interval: unknown; value: { doubleValue?: number; int64Value?: string } }>
-  }> = (limitData.timeSeries ?? []).sort(
-    (
-      a: { metric: { labels: Record<string, string> } },
-      b: { metric: { labels: Record<string, string> } }
-    ) =>
-      preferTokens(a.metric?.labels?.quota_metric) - preferTokens(b.metric?.labels?.quota_metric)
-  )
+  const usageMetrics = geminiUsage.map(ts => ts.metric?.labels?.quota_metric)
+  const limitMetrics = geminiLimit.map(ts => ts.metric?.labels?.quota_metric)
+  console.log('[gemini-quota] usage metrics:', usageMetrics)
+  console.log('[gemini-quota] limit metrics:', limitMetrics)
 
-  if (!usageSeries.length || !limitSeries.length) {
-    console.warn('[gemini-quota] No time series data returned — project may have no quota data yet')
+  if (!topUsage || !topLimit) {
+    console.warn(`[gemini-quota] Missing usage or limit series for ${matchedService}`)
     return null
   }
 
-  const topUsage = usageSeries[0]
-  const topLimit = limitSeries[0]
+  // Skip if best metric is just resource management (not actual generation quota)
+  if (topUsage.metric?.labels?.quota_metric?.includes('resource_management')) {
+    console.warn('[gemini-quota] Only resource_management metric found — not a generation quota, skipping')
+    return null
+  }
+
   const quotaMetric = topUsage.metric?.labels?.quota_metric ?? 'unknown'
-
-  const latestUsagePoint = topUsage.points?.[0]
-  const latestLimitPoint = topLimit.points?.[0]
-
-  const tokensUsed = Number(
-    latestUsagePoint?.value?.doubleValue ?? latestUsagePoint?.value?.int64Value ?? 0
-  )
-  const tokensLimit = Number(
-    latestLimitPoint?.value?.doubleValue ?? latestLimitPoint?.value?.int64Value ?? 1
-  )
+  const tokensUsed = Number(topUsage.points?.[0]?.value?.doubleValue ?? topUsage.points?.[0]?.value?.int64Value ?? 0)
+  const tokensLimit = Number(topLimit.points?.[0]?.value?.doubleValue ?? topLimit.points?.[0]?.value?.int64Value ?? 1)
 
   const usedPercent = tokensLimit > 0 ? (tokensUsed / tokensLimit) * 100 : 0
   const remainingPercent = Math.max(0, Math.min(100, Math.round(100 - usedPercent)))
 
-  console.log(
-    `[gemini-quota] metric=${quotaMetric} used=${tokensUsed}/${tokensLimit} remaining=${remainingPercent}%`
-  )
+  console.log(`[gemini-quota] metric=${quotaMetric} used=${tokensUsed}/${tokensLimit} remaining=${remainingPercent}%`)
 
   return { remainingPercent, tokensUsed, tokensLimit, quotaMetric }
 }

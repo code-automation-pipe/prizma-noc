@@ -5,7 +5,7 @@ import { api_ledger } from '@/lib/db/schema'
 
 const AddEntrySchema = z.object({
   service: z.enum(['gemini', 'tmapi', 'modal']),
-  entry_type: z.enum(['topup', 'spend']),
+  entry_type: z.enum(['topup', 'free_credit', 'spend']),
   amount: z.number().positive(),
   note: z.string().max(200).optional(),
 })
@@ -28,15 +28,16 @@ export async function GET() {
     let todayS = 0
     for (const e of serviceEntries) {
       const amt = Number(e.amount)
-      if (e.entry_type === 'topup') {
+      if (e.entry_type === 'topup' || e.entry_type === 'free_credit') {
         balance += amt
-      } else {
+      } else if (e.entry_type === 'spend') {
         balance -= amt
         cumSpend += amt
         if (new Date(e.created_at).toDateString() === todayStr) {
           todayS += amt
         }
       }
+      // balance_snapshot entries are not part of USD accounting — skip
     }
     balances[service] = balance
     dailySpend[service] = todayS

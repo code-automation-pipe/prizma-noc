@@ -12,9 +12,7 @@ const UpdateStoreSchema = z.object({
   outlook_email: z.string().email().optional(),
   outlook_credentials: z
     .object({
-      tenantId: z.string().min(1),
-      clientId: z.string().min(1),
-      clientSecret: z.string().min(1),
+      appPassword: z.string().min(1),
     })
     .optional(),
 })

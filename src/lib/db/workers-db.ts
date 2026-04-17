@@ -1,32 +1,14 @@
 import { neon } from '@neondatabase/serverless'
 
-// product_workflow DB — pipeline status (READY / PROCESSING / QUESTION / UPLOADED)
-const workersSQL = neon(process.env.WORKERS_DATABASE_URL!)
-
 // products DB — raw scrape data (uploaded_at, pipeline_ended_at, pipeline_cost_usd, …)
-const productsSQL = neon(process.env.PRODUCTS_DATABASE_URL!)
+// Same DB as DATABASE_URL; PRODUCTS_DATABASE_URL alias kept for clarity but falls back to DATABASE_URL
+const productsSQL = neon((process.env.PRODUCTS_DATABASE_URL ?? process.env.DATABASE_URL)!)
 
 export interface DraftCount {
   shop_id: number
   draft_count: number
 }
 
-/**
- * Reads draft counts from the products table.
- * Drafts = products where uploaded_at IS NULL (not yet sent to Etsy).
- */
-export async function getDraftCountsPerShop(): Promise<DraftCount[]> {
-  const rows = await productsSQL`
-    SELECT shop_id, COUNT(*)::int AS draft_count
-    FROM products
-    WHERE uploaded_at IS NULL
-    GROUP BY shop_id
-  `
-  return rows.map((r) => ({
-    shop_id: Number(r.shop_id),
-    draft_count: Number(r.draft_count),
-  }))
-}
 
 export interface PipelineSpend {
   /** Total pipeline cost today (last 24h rolling window) */
@@ -85,19 +67,3 @@ export async function getPublishedTodayPerShop(): Promise<DraftCount[]> {
   }))
 }
 
-/**
- * Returns count of products from product_workflow that are not yet uploaded.
- * Status != 'UPLOADED' includes READY, PROCESSING, and QUESTION states.
- */
-export async function getDraftStatePerShop(): Promise<DraftCount[]> {
-  const rows = await workersSQL`
-    SELECT shop_id, COUNT(*)::int AS draft_count
-    FROM product_workflow
-    WHERE status != 'UPLOADED'
-    GROUP BY shop_id
-  `
-  return rows.map((r) => ({
-    shop_id: Number(r.shop_id),
-    draft_count: Number(r.draft_count),
-  }))
-}

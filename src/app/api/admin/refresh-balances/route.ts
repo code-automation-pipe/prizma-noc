@@ -17,17 +17,29 @@ export async function POST() {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 30000)
 
-  let res: Response
+  let balancesRes: Response
+  let snapshotRes: Response
+  let oxylabsRes: Response
   try {
-    res = await fetch(`${appUrl}/api/cron/fetch-api-balances`, {
-      headers: { Authorization: `Bearer ${secret}` },
-      signal: controller.signal,
-    })
+    ;[balancesRes, snapshotRes, oxylabsRes] = await Promise.all([
+      fetch(`${appUrl}/api/cron/fetch-api-balances`, {
+        headers: { Authorization: `Bearer ${secret}` },
+        signal: controller.signal,
+      }),
+      fetch(`${appUrl}/api/cron/snapshot-drafts`, {
+        headers: { Authorization: `Bearer ${secret}` },
+        signal: controller.signal,
+      }),
+      fetch(`${appUrl}/api/cron/fetch-oxylabs`, {
+        headers: { Authorization: `Bearer ${secret}` },
+        signal: controller.signal,
+      }),
+    ])
   } finally {
     clearTimeout(timeout)
   }
 
-  if (!res.ok) {
+  if (!balancesRes.ok || !snapshotRes.ok || !oxylabsRes.ok) {
     return new Response('Cron failed', { status: 502 })
   }
 

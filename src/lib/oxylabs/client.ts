@@ -44,11 +44,24 @@ export async function fetchOxylabsStats(): Promise<OxylabsDayStats[]> {
         ? data
         : []
 
-  return raw.map((d) => ({
-    date: String(d.date ?? d.day ?? d.period ?? ''),
-    requests: Number(d.all_count ?? d.requests ?? d.requests_consumed ?? 0),
-    traffic_bytes: Number(d.request_traffic ?? d.traffic_bytes ?? d.bandwidth ?? 0),
-  }))
+  // API returns { date, products: [{ all_count, request_traffic, title, ... }] }
+  // Sum across all products for each day
+  return raw.map((d) => {
+    const products = Array.isArray(d.products)
+      ? (d.products as Record<string, unknown>[])
+      : []
+    const requests = products.length > 0
+      ? products.reduce((sum, p) => sum + Number(p.all_count ?? 0), 0)
+      : Number(d.all_count ?? d.requests ?? 0)
+    const traffic_bytes = products.length > 0
+      ? products.reduce((sum, p) => sum + Number(p.request_traffic ?? 0), 0)
+      : Number(d.request_traffic ?? d.traffic_bytes ?? 0)
+    return {
+      date: String(d.date ?? d.day ?? d.period ?? ''),
+      requests,
+      traffic_bytes,
+    }
+  })
 }
 
 /**

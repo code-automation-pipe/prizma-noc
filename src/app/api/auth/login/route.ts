@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     status: 200,
     headers: {
       'Content-Type': 'application/json',
-      'Set-Cookie': `session=${expected}; HttpOnly; Path=/; SameSite=Strict; Max-Age=${maxAge}${isProd ? '; Secure' : ''}`,
+      'Set-Cookie': `session=${expected}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${maxAge}${isProd ? '; Secure' : ''}`,
     },
   })
 }

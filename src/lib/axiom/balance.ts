@@ -37,8 +37,10 @@ export async function fetchAxiomUsage(): Promise<AxiomUsage | null> {
 }
 
 async function statusBucket(term: string): Promise<AxiomStatusBucket> {
+  // Bound the query to last 30 days — unbounded search across the whole dataset
+  // tends to 500 on Axiom. Use `where _time > ago(30d)` before `search`.
+  const apl = `['${DATASET}'] | where _time > ago(30d) | search "${term}" | summarize cnt = count(), last = max(_time)`
   try {
-    const apl = `['${DATASET}'] | search "${term}" | summarize cnt = count(), last = max(_time)`
     const result = await queryAxiom(apl)
     const rows = normalizeAxiomResult(result)
     if (!rows.length) return { count: 0, last: null }
@@ -48,7 +50,7 @@ async function statusBucket(term: string): Promise<AxiomStatusBucket> {
       last: r['last'] ? String(r['last']) : null,
     }
   } catch (err) {
-    console.error(`[axiom-status] ${term} failed:`, err)
+    console.error(`[axiom-status] ${term} failed:`, err instanceof Error ? err.message : err)
     return { count: 0, last: null }
   }
 }

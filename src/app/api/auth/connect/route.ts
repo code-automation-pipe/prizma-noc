@@ -34,10 +34,20 @@ export async function GET(request: Request) {
     redirect_uri: `${appUrl}/api/auth/callback`,
     scope: 'https://outlook.office.com/IMAP.AccessAsUser.All offline_access',
     state: storeId,
-    login_hint: store.outlook_email, // pre-fills the email field on Microsoft's login page
+    login_hint: store.outlook_email,
     response_mode: 'query',
+    // Force a fresh consent prompt — prevents Microsoft from silently re-issuing
+    // a code from a cached session, which can lead to "code expired" loops if a
+    // prior code is re-used.
+    prompt: 'select_account',
   })
 
   const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params}`
-  return Response.redirect(authUrl)
+  return new Response(null, {
+    status: 303,
+    headers: {
+      Location: authUrl,
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+    },
+  })
 }

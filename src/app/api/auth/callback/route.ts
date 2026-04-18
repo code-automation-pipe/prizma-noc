@@ -27,7 +27,7 @@ export async function GET(request: Request) {
   }
 
   // Exchange authorization code for tokens
-  const tokenRes = await fetch('https://login.microsoftonline.com/consumers/oauth2/v2.0/token', {
+  const tokenRes = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({

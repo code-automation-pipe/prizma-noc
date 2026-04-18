@@ -26,7 +26,8 @@ export async function GET(request: Request) {
     return Response.redirect(`${appUrl}/settings?error=missing_code`)
   }
 
-  // Exchange authorization code for tokens
+  // Exchange authorization code for tokens.
+  // Microsoft v2.0 requires the `scope` parameter to match the original auth request.
   const tokenRes = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -36,14 +37,15 @@ export async function GET(request: Request) {
       redirect_uri: `${appUrl}/api/auth/callback`,
       client_id: process.env.AZURE_CLIENT_ID!,
       client_secret: process.env.AZURE_CLIENT_SECRET!,
+      scope: 'https://outlook.office.com/IMAP.AccessAsUser.All offline_access',
     }),
   })
 
   const tokens = await tokenRes.json()
 
-  if (tokens.error) {
-    const desc = tokens.error_description ?? tokens.error
-    console.error('[oauth callback]', desc)
+  if (tokens.error || !tokenRes.ok) {
+    const desc = tokens.error_description ?? tokens.error ?? `HTTP ${tokenRes.status}`
+    console.error('[oauth callback] token exchange failed:', JSON.stringify(tokens))
     return Response.redirect(`${appUrl}/settings?error=${encodeURIComponent(desc)}`)
   }
 

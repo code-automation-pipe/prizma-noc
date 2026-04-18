@@ -4,12 +4,13 @@ import { api_ledger, etsy_messages, stores, triggered_alerts } from '@/lib/db/sc
 import { getPublishedTodayPerShop, getPipelineSpend } from '@/lib/db/workers-db'
 import { decryptCredentials } from '@/lib/crypto/credentials'
 import { computeStoreHealth } from '@/lib/health'
+import { fetchAxiomStatusCounts } from '@/lib/axiom/balance'
 import type { DashboardData, LedgerSummary, StoreWithStatus } from '@/types'
 
 export const revalidate = 60
 
 export async function GET() {
-  const [allStores, unreadCounts, recentAlerts, ledgerEntries, pipelineSpend, publishedCounts] = await Promise.all([
+  const [allStores, unreadCounts, recentAlerts, ledgerEntries, pipelineSpend, publishedCounts, axiomStatus] = await Promise.all([
     db.query.stores.findMany({
       orderBy: (s, { asc }) => asc(s.name),
     }),
@@ -27,6 +28,7 @@ export async function GET() {
     }),
     getPipelineSpend().catch((e) => { console.error('[workers-db] getPipelineSpend failed:', e); return null }),
     getPublishedTodayPerShop().catch((e) => { console.error('[workers-db] getPublishedTodayPerShop failed:', e); return [] }),
+    fetchAxiomStatusCounts().catch((e) => { console.error('[axiom-status] failed:', e); return null }),
   ])
 
   // Build unread map
@@ -114,6 +116,7 @@ export async function GET() {
     cumulative_spend: cumulativeSpend,
     monthly_requests: monthlyRequests,
     plan_limits: planLimits,
+    axiom_status: axiomStatus ?? undefined,
   }
 
   const publishedMap = new Map(publishedCounts.map((p) => [p.shop_id, p.draft_count]))

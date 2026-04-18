@@ -41,6 +41,12 @@ export interface LedgerSummary {
   monthly_requests: Record<string, number>
   /** Plan limits — from env vars (e.g. OXYLABS_MONTHLY_LIMIT) */
   plan_limits: Record<string, number>
+  /** Axiom log status breakdown — counts + last-seen timestamps */
+  axiom_status?: {
+    completed: { count: number; last: string | null }
+    error: { count: number; last: string | null }
+    running: { count: number; last: string | null }
+  }
 }
 
 export interface AlertRuleWithMeta {

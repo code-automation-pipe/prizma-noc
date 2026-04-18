@@ -35,6 +35,51 @@ const SERVICES = [
   { key: 'axiom', label: 'Axiom', isLive: true, noBalance: false, displayMode: 'usd' as const },
 ] as const
 
+function relativeTime(iso: string | null): string {
+  if (!iso) return '—'
+  const then = new Date(iso).getTime()
+  if (isNaN(then)) return '—'
+  const diff = Math.max(0, Date.now() - then)
+  const m = Math.floor(diff / 60_000)
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  const d = Math.floor(h / 24)
+  return `${d}d ago`
+}
+
+function StatusRow({
+  label,
+  count,
+  last,
+  dot,
+  text,
+}: {
+  label: string
+  count: number
+  last: string | null
+  dot: string
+  text: string
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className={`inline-flex items-center gap-1.5 text-[10px] font-mono ${text}`}>
+        <span className={`size-1.5 rounded-full shrink-0 ${dot}`} />
+        {label}
+      </span>
+      <span className="flex items-baseline gap-1.5">
+        <span className={`font-mono font-bold tabular-nums text-sm ${text}`}>
+          {count.toLocaleString()}
+        </span>
+        <span className="text-[9px] font-mono text-muted-foreground tabular-nums">
+          {relativeTime(last)}
+        </span>
+      </span>
+    </div>
+  )
+}
+
 export function ApiWallet({ ledger }: ApiWalletProps) {
   const [open, setOpen] = useState(false)
   const [service, setService] = useState<'gemini' | 'tmapi' | 'modal' | 'axiom'>('gemini')
@@ -177,11 +222,16 @@ export function ApiWallet({ ledger }: ApiWalletProps) {
           const dailySpend = ledger.daily_spend[svc.key] ?? 0
           const cumSpend = ledger.cumulative_spend[svc.key] ?? 0
           const isGemini = svc.displayMode === 'gemini'
-          const quotaPct = isGemini ? (ledger.quota_percent?.['gemini'] ?? null) : null
+          // For Gemini: derive % remaining from credits vs cumulative spend (not the unreliable Cloud Quotas API).
+          const creditsRemainingPct =
+            isGemini && totalCredits && totalCredits > 0
+              ? Math.max(0, Math.min(100, ((totalCredits - cumSpend) / totalCredits) * 100))
+              : null
           const monthlyReqs = svc.noBalance ? (ledger.monthly_requests?.[svc.key] ?? null) : null
           const planLimit = svc.noBalance ? (ledger.plan_limits?.[svc.key] ?? null) : null
           const usedPct = planLimit && monthlyReqs !== null ? Math.round((monthlyReqs / planLimit) * 100) : null
           const isLow = !isGemini && balance !== null && balance < 10
+          const axiomStatus = svc.key === 'axiom' ? ledger.axiom_status ?? null : null
 
           return (
             <div
@@ -208,27 +258,21 @@ export function ApiWallet({ ledger }: ApiWalletProps) {
 
               {isGemini ? (
                 <div className="flex flex-col gap-1">
-                  {quotaPct === null ? (
+                  {creditsRemainingPct === null ? (
                     <p className="text-2xl font-mono text-muted-foreground">—</p>
-                  ) : quotaPct > 1 ? (
-                    <p className={`text-2xl font-mono font-bold tabular-nums ${
-                      quotaPct < 20 ? 'text-destructive' : 'text-foreground'
-                    }`}>
-                      {Math.round(quotaPct)}%
-                    </p>
                   ) : (
-                    <p className={`text-xl font-mono font-bold ${
-                      quotaPct === 1
-                        ? 'text-emerald-600 dark:text-emerald-400'
-                        : 'text-destructive'
+                    <p className={`text-2xl font-mono font-bold tabular-nums ${
+                      creditsRemainingPct < 20
+                        ? 'text-destructive'
+                        : creditsRemainingPct < 50
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : 'text-foreground'
                     }`}>
-                      {quotaPct === 1 ? 'Active' : 'Error'}
+                      {creditsRemainingPct.toFixed(1)}%
                     </p>
                   )}
                   <div className="space-y-0.5">
-                    <p className="text-[10px] text-muted-foreground">
-                      {quotaPct !== null && quotaPct > 1 ? 'quota remaining' : 'AI Studio key'}
-                    </p>
+                    <p className="text-[10px] text-muted-foreground">credits remaining</p>
                     {totalCredits !== null ? (
                       <p className="text-[10px] font-mono text-muted-foreground">
                         ${cumSpend.toFixed(4)} / ${totalCredits.toFixed(2)}
@@ -276,13 +320,34 @@ export function ApiWallet({ ledger }: ApiWalletProps) {
                   </div>
                 </div>
               ) : svc.key === 'axiom' ? (
-                <div className="flex flex-col gap-1">
-                  <p className="text-2xl font-mono font-bold tabular-nums">
-                    {balance !== null ? Number(balance).toLocaleString() : '—'}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {balance !== null ? 'events logged' : 'press fetch to load'}
-                  </p>
+                <div className="flex flex-col gap-1.5">
+                  {axiomStatus ? (
+                    <>
+                      <StatusRow
+                        label="Completed"
+                        count={axiomStatus.completed.count}
+                        last={axiomStatus.completed.last}
+                        dot="bg-emerald-500"
+                        text="text-emerald-600 dark:text-emerald-400"
+                      />
+                      <StatusRow
+                        label="Error"
+                        count={axiomStatus.error.count}
+                        last={axiomStatus.error.last}
+                        dot="bg-destructive"
+                        text="text-destructive"
+                      />
+                      <StatusRow
+                        label="Running"
+                        count={axiomStatus.running.count}
+                        last={axiomStatus.running.last}
+                        dot="bg-amber-500"
+                        text="text-amber-600 dark:text-amber-400"
+                      />
+                    </>
+                  ) : (
+                    <p className="text-[10px] text-muted-foreground font-mono">no axiom data</p>
+                  )}
                 </div>
               ) : (
                 <div className="flex flex-col gap-1">

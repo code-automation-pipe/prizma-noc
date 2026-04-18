@@ -1,0 +1,15 @@
+import { Suspense } from 'react'
+import type { Metadata } from 'next'
+import { SettingsClient } from '@/components/settings/SettingsClient'
+
+export const metadata: Metadata = {
+  title: 'Settings — Etsy Monitor',
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense>
+      <SettingsClient />
+    </Suspense>
+  )
+}

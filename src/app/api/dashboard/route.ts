@@ -5,12 +5,13 @@ import { getPublishedTodayPerShop, getPipelineSpend } from '@/lib/db/workers-db'
 import { decryptCredentials } from '@/lib/crypto/credentials'
 import { computeStoreHealth } from '@/lib/health'
 import { fetchAxiomStatusCounts } from '@/lib/axiom/balance'
+import { fetchPipelineItemsToday } from '@/lib/axiom/pipeline'
 import type { DashboardData, LedgerSummary, StoreWithStatus } from '@/types'
 
 export const revalidate = 60
 
 export async function GET() {
-  const [allStores, unreadCounts, recentAlerts, ledgerEntries, pipelineSpend, publishedCounts, axiomStatus] = await Promise.all([
+  const [allStores, unreadCounts, recentAlerts, ledgerEntries, pipelineSpend, publishedCounts, axiomStatus, pipelineItemsToday] = await Promise.all([
     db.query.stores.findMany({
       orderBy: (s, { asc }) => asc(s.name),
     }),
@@ -29,13 +30,14 @@ export async function GET() {
     getPipelineSpend().catch((e) => { console.error('[workers-db] getPipelineSpend failed:', e); return null }),
     getPublishedTodayPerShop().catch((e) => { console.error('[workers-db] getPublishedTodayPerShop failed:', e); return [] }),
     fetchAxiomStatusCounts().catch((e) => { console.error('[axiom-status] failed:', e); return null }),
+    fetchPipelineItemsToday().catch((e) => { console.error('[axiom-pipeline] failed:', e); return new Map<number, { completed: number; failed: number }>() }),
   ])
 
   // Build unread map
   const unreadMap = new Map(unreadCounts.map((u) => [u.store_id, u.count]))
 
   // Compute ledger summaries per service
-  const services = ['gemini', 'tmapi', 'modal', 'oxylabs', 'axiom'] as const
+  const services = ['gemini', 'tmapi', 'oxylabs', 'axiom'] as const
   const balances: Record<string, number> = {}
   const grossCredits: Record<string, number> = {}
   const quotaPercent: Record<string, number> = {}
@@ -67,12 +69,11 @@ export async function GET() {
 
     if (service === 'gemini' && pipelineSpend) {
       // Gemini (Google AI Studio) spend = pipeline_cost_usd from the workers DB
-      // Written by the Modal pipeline after each product run
       dailySpend['gemini']      = pipelineSpend.today_usd
       cumulativeSpend['gemini'] = pipelineSpend.cumulative_usd
       if (hasCredits) balances['gemini'] = credits - pipelineSpend.cumulative_usd
     } else {
-      // modal, tmapi: manual ledger spend entries
+      // tmapi: manual ledger spend entries
       let cumSpend = 0
       let todaySpend = 0
       for (const e of serviceEntries) {
@@ -108,6 +109,27 @@ export async function GET() {
     planLimits['oxylabs'] = Number(process.env.OXYLABS_MONTHLY_LIMIT)
   }
 
+  // Derive status from latest balance_snapshot note.
+  // Notes are formatted: "auto-fetched:<active|token_expired|inactive>[:<reason>]".
+  const serviceStatus: Record<string, { state: 'active' | 'token_expired' | 'inactive'; last: string | null; reason?: string }> = {}
+  for (const service of services) {
+    const latest = ledgerEntries
+      .filter((e) => e.service === service && e.entry_type === 'balance_snapshot' && typeof e.note === 'string' && e.note.startsWith('auto-fetched:'))
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+    if (!latest) continue
+    const parts = (latest.note ?? '').split(':')
+    const raw = parts[1]
+    const state: 'active' | 'token_expired' | 'inactive' =
+      raw === 'active' ? 'active'
+      : raw === 'token_expired' ? 'token_expired'
+      : 'inactive'
+    serviceStatus[service] = {
+      state,
+      last: new Date(latest.created_at).toISOString(),
+      reason: state === 'active' ? undefined : (parts.slice(2).join(':') || undefined),
+    }
+  }
+
   const ledger: LedgerSummary = {
     balances,
     credits: grossCredits,
@@ -117,6 +139,7 @@ export async function GET() {
     monthly_requests: monthlyRequests,
     plan_limits: planLimits,
     axiom_status: axiomStatus ?? undefined,
+    service_status: serviceStatus,
   }
 
   const publishedMap = new Map(publishedCounts.map((p) => [p.shop_id, p.draft_count]))
@@ -127,6 +150,7 @@ export async function GET() {
     const notProcessed   = s.last_draft_count  // pipeline writes this directly
     const publishedToday = publishedMap.get(s.shop_id) ?? 0
     const draftsMadeToday = 0
+    const itemStats = pipelineItemsToday.get(s.shop_id) ?? { completed: 0, failed: 0 }
 
     // Check if email screener credentials are configured (OAuth2 or app password)
     let emailScreenerConnected = false
@@ -150,6 +174,8 @@ export async function GET() {
       unread_message_count: unreadCount,
       published_today: publishedToday,
       drafts_made_today: draftsMadeToday,
+      items_completed_today: itemStats.completed,
+      items_failed_today: itemStats.failed,
       email_screener_connected: emailScreenerConnected,
       health: computeStoreHealth(emailScreenerConnected, notProcessed ?? 0, s.draft_alert_threshold),
     }

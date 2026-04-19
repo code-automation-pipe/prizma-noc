@@ -38,7 +38,7 @@ export const etsy_messages = pgTable('etsy_messages', {
 export const alert_rules = pgTable('alert_rules', {
   id: uuid('id').primaryKey().defaultRandom(),
   store_id: uuid('store_id').references(() => stores.id, { onDelete: 'cascade' }), // null = global
-  service: text('service'), // null | 'oxylabs' | 'gemini' | 'tmapi' | 'modal'
+  service: text('service'), // null | 'oxylabs' | 'gemini' | 'tmapi'
   rule_type: text('rule_type').notNull(), // low_drafts | api_budget | api_balance | unread_message | zero_publishing
   threshold: numeric('threshold').notNull(),
   enabled: boolean('enabled').notNull().default(true),
@@ -56,7 +56,7 @@ export const triggered_alerts = pgTable('triggered_alerts', {
 
 export const api_ledger = pgTable('api_ledger', {
   id: uuid('id').primaryKey().defaultRandom(),
-  service: text('service').notNull(), // gemini | tmapi | modal
+  service: text('service').notNull(), // gemini | tmapi
   entry_type: text('entry_type').notNull(), // topup | spend | balance_snapshot
   amount: numeric('amount').notNull(), // USD, always positive
   note: text('note'),

@@ -107,6 +107,12 @@ export function StoreOverview({ stores }: StoreOverviewProps) {
                 Published Today
               </TableHead>
               <TableHead className="text-right text-[10px] font-mono tracking-[0.15em] uppercase text-muted-foreground py-2.5">
+                Completed Today
+              </TableHead>
+              <TableHead className="text-right text-[10px] font-mono tracking-[0.15em] uppercase text-muted-foreground py-2.5">
+                Failed Today
+              </TableHead>
+              <TableHead className="text-right text-[10px] font-mono tracking-[0.15em] uppercase text-muted-foreground py-2.5">
                 Unread
               </TableHead>
               <TableHead className="text-[10px] font-mono tracking-[0.15em] uppercase text-muted-foreground py-2.5">
@@ -121,7 +127,7 @@ export function StoreOverview({ stores }: StoreOverviewProps) {
             {paginated.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={6}
+                  colSpan={8}
                   className="text-center text-xs font-mono text-muted-foreground py-10"
                 >
                   No stores found
@@ -147,6 +153,24 @@ export function StoreOverview({ stores }: StoreOverviewProps) {
                         : 'text-foreground'
                     }`}>
                       {store.published_today}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right py-3">
+                    <span className={`font-mono tabular-nums text-sm ${
+                      store.items_completed_today > 0
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-muted-foreground'
+                    }`}>
+                      {store.items_completed_today.toLocaleString()}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right py-3">
+                    <span className={`font-mono tabular-nums text-sm ${
+                      store.items_failed_today > 0
+                        ? 'text-destructive font-semibold'
+                        : 'text-muted-foreground'
+                    }`}>
+                      {store.items_failed_today.toLocaleString()}
                     </span>
                   </TableCell>
                   <TableCell className="text-right py-3">

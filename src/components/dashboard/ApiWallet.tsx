@@ -31,7 +31,6 @@ const SERVICES = [
   { key: 'oxylabs', label: 'OxyLabs', isLive: true, noBalance: true, displayMode: 'usd' as const },
   { key: 'gemini', label: 'Google AI Studio', isLive: true, noBalance: false, displayMode: 'gemini' as const },
   { key: 'tmapi', label: 'TMAPI / 1688', isLive: true, noBalance: false, displayMode: 'usd' as const },
-  { key: 'modal', label: 'Modal (GPU)', isLive: false, noBalance: false, displayMode: 'usd' as const },
   { key: 'axiom', label: 'Axiom', isLive: true, noBalance: false, displayMode: 'usd' as const },
 ] as const
 
@@ -82,7 +81,7 @@ function StatusRow({
 
 export function ApiWallet({ ledger }: ApiWalletProps) {
   const [open, setOpen] = useState(false)
-  const [service, setService] = useState<'gemini' | 'tmapi' | 'modal' | 'axiom'>('gemini')
+  const [service, setService] = useState<'gemini' | 'tmapi' | 'axiom'>('gemini')
   const [entryType, setEntryType] = useState<'topup' | 'free_credit' | 'spend'>('spend')
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
@@ -159,7 +158,6 @@ export function ApiWallet({ ledger }: ApiWalletProps) {
                     <SelectContent>
                       <SelectItem value="gemini">Google AI Studio</SelectItem>
                       <SelectItem value="tmapi">TMAPI / 1688</SelectItem>
-                      <SelectItem value="modal">Modal (GPU)</SelectItem>
                       <SelectItem value="axiom">Axiom</SelectItem>
                     </SelectContent>
                   </Select>
@@ -215,7 +213,7 @@ export function ApiWallet({ ledger }: ApiWalletProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         {SERVICES.map((svc) => {
           const balance = svc.noBalance ? null : (ledger.balances[svc.key] ?? null)
           const totalCredits = ledger.credits?.[svc.key] ?? null
@@ -230,8 +228,9 @@ export function ApiWallet({ ledger }: ApiWalletProps) {
           const monthlyReqs = svc.noBalance ? (ledger.monthly_requests?.[svc.key] ?? null) : null
           const planLimit = svc.noBalance ? (ledger.plan_limits?.[svc.key] ?? null) : null
           const usedPct = planLimit && monthlyReqs !== null ? Math.round((monthlyReqs / planLimit) * 100) : null
-          const isLow = !isGemini && balance !== null && balance < 10
+          const isLow = !isGemini && svc.key !== 'tmapi' && balance !== null && balance < 10
           const axiomStatus = svc.key === 'axiom' ? ledger.axiom_status ?? null : null
+          const tmapiStatus = svc.key === 'tmapi' ? ledger.service_status?.tmapi ?? null : null
 
           return (
             <div
@@ -318,6 +317,44 @@ export function ApiWallet({ ledger }: ApiWalletProps) {
                       <p className="text-[10px] text-muted-foreground">press fetch to load</p>
                     )}
                   </div>
+                </div>
+              ) : svc.key === 'tmapi' ? (
+                <div className="flex flex-col gap-1">
+                  {tmapiStatus ? (() => {
+                    const label =
+                      tmapiStatus.state === 'active' ? 'Active'
+                      : tmapiStatus.state === 'token_expired' ? 'Active'
+                      : 'Inactive'
+                    const colorClass =
+                      tmapiStatus.state === 'active'
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : tmapiStatus.state === 'token_expired'
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : 'text-destructive'
+                    const subtitle =
+                      tmapiStatus.state === 'active' ? 'endpoint responding'
+                      : tmapiStatus.state === 'token_expired' ? 'service reachable · token expired'
+                      : (tmapiStatus.reason ?? 'unreachable')
+                    return (
+                      <>
+                        <p className={`text-2xl font-mono font-bold ${colorClass}`}>{label}</p>
+                        <div className="space-y-0.5">
+                          <p className="text-[10px] text-muted-foreground">{subtitle}</p>
+                          <p className="text-[10px] font-mono text-muted-foreground">
+                            checked {relativeTime(tmapiStatus.last)}
+                          </p>
+                          <p className="text-[10px] font-mono text-muted-foreground">
+                            today: ${dailySpend.toFixed(2)}
+                          </p>
+                        </div>
+                      </>
+                    )
+                  })() : (
+                    <>
+                      <p className="text-2xl font-mono text-muted-foreground">—</p>
+                      <p className="text-[10px] text-muted-foreground">no status yet</p>
+                    </>
+                  )}
                 </div>
               ) : svc.key === 'axiom' ? (
                 <div className="flex flex-col gap-1.5">

@@ -4,7 +4,7 @@ import { db } from '@/lib/db'
 import { api_ledger } from '@/lib/db/schema'
 
 const AddEntrySchema = z.object({
-  service: z.enum(['gemini', 'tmapi', 'modal']),
+  service: z.enum(['gemini', 'tmapi']),
   entry_type: z.enum(['topup', 'free_credit', 'spend']),
   amount: z.number().positive(),
   note: z.string().max(200).optional(),
@@ -15,7 +15,7 @@ export async function GET() {
     orderBy: desc(api_ledger.created_at),
   })
 
-  const services = ['gemini', 'tmapi', 'modal'] as const
+  const services = ['gemini', 'tmapi'] as const
   const balances: Record<string, number> = {}
   const dailySpend: Record<string, number> = {}
   const cumulativeSpend: Record<string, number> = {}

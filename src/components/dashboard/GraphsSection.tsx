@@ -169,7 +169,6 @@ export function GraphsSection({ storeNames }: GraphsSectionProps) {
                 <Legend />
                 <Bar dataKey="gemini" stackId="a" fill={CHART_COLORS[0]} name="Gemini" />
                 <Bar dataKey="tmapi" stackId="a" fill={CHART_COLORS[1]} name="TMAPI" />
-                <Bar dataKey="modal" stackId="a" fill={CHART_COLORS[2]} name="Modal" />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -186,7 +185,6 @@ export function GraphsSection({ storeNames }: GraphsSectionProps) {
                 <Legend />
                 <Line type="monotone" dataKey="gemini_cumulative" stroke={CHART_COLORS[0]} dot={false} name="Gemini" />
                 <Line type="monotone" dataKey="tmapi_cumulative" stroke={CHART_COLORS[1]} dot={false} name="TMAPI" />
-                <Line type="monotone" dataKey="modal_cumulative" stroke={CHART_COLORS[2]} dot={false} name="Modal" />
               </LineChart>
             </ResponsiveContainer>
           )}

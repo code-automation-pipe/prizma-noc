@@ -14,12 +14,20 @@ export interface StoreWithStatus {
   unread_message_count: number
   published_today: number         // products uploaded to Etsy today (calendar day)
   drafts_made_today: number       // delta: prev snapshot minus current not_processed
+  items_completed_today: number   // worker item_completed events in Axiom, last 24h
+  items_failed_today: number      // worker item_failed events in Axiom, last 24h
   email_screener_connected: boolean // true = IMAP app password is configured
   health: StoreHealth
 }
 
+export interface PipelineItemStats {
+  shop_id: number
+  completed: number
+  failed: number
+}
+
 export interface ApiWalletService {
-  service: 'oxylabs' | 'gemini' | 'tmapi' | 'modal'
+  service: 'oxylabs' | 'gemini' | 'tmapi'
   label: string
   balance: number | null // null = not available (OxyLabs)
   daily_spend: number
@@ -47,6 +55,12 @@ export interface LedgerSummary {
     error: { count: number; last: string | null }
     running: { count: number; last: string | null }
   }
+  /** Active/inactive status per service, derived from the latest balance_snapshot note. */
+  service_status?: Record<string, {
+    state: 'active' | 'token_expired' | 'inactive'
+    last: string | null
+    reason?: string
+  }>
 }
 
 export interface AlertRuleWithMeta {

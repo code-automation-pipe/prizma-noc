@@ -26,7 +26,7 @@ export async function GET() {
     .map(([date, svcData]) => ({ date, ...svcData }))
 
   // Compute cumulative spend per service
-  const services = ['gemini', 'tmapi', 'modal'] as const
+  const services = ['gemini', 'tmapi'] as const
   const runningTotals: Record<string, number> = {}
   const cumulativeRows = rows.map((row) => {
     const cum: Record<string, unknown> = { date: row.date }

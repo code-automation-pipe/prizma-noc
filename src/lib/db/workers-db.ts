@@ -22,7 +22,7 @@ export interface PipelineSpend {
 /**
  * Reads pipeline spend from the products table.
  * Uses a rolling 24h window for "today" to avoid timezone/midnight issues.
- * pipeline_cost_usd already includes all costs (Gemini + Modal GPU).
+ * pipeline_cost_usd already includes all pipeline inference costs.
  */
 export async function getPipelineSpend(): Promise<PipelineSpend> {
   const [todayRows, allRows] = await Promise.all([

@@ -21,8 +21,24 @@ interface Message {
   sender_name: string
   subject: string
   type: string
+  subtype: string | null
+  price_usd: string | null
+  country: string | null
+  order_id: string | null
   received_at: string
   is_read: boolean
+}
+
+const SUBTYPE_LABEL: Record<string, string> = {
+  new: 'New',
+  reply: 'Reply',
+  help: 'Help',
+}
+
+const SUBTYPE_CLASSES: Record<string, string> = {
+  new: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
+  reply: 'bg-slate-50 dark:bg-slate-950/40 text-slate-700 dark:text-slate-400 border-slate-200 dark:border-slate-800',
+  help: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800',
 }
 
 interface MessagesFeedProps {
@@ -176,28 +192,68 @@ export function MessagesFeed({ stores }: MessagesFeedProps) {
             No activity yet — the cron polls every 5 minutes
           </div>
         ) : (
-          filtered.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex items-center gap-3 px-4 py-3 ${!msg.is_read ? 'bg-muted/30' : ''}`}
-            >
-              <span className={`size-2 rounded-full flex-shrink-0 ${!msg.is_read ? 'bg-blue-500' : 'bg-transparent'}`} />
-              <TypeBadge type={msg.type} />
-              <StoreBadge name={storeMap.get(msg.store_id) ?? 'Unknown'} />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{msg.sender_name}</p>
-                <p className="text-xs text-muted-foreground truncate">{msg.subject}</p>
+          filtered.map((msg) => {
+            const price = msg.price_usd ? Number(msg.price_usd) : null
+            const isOrder = msg.type === 'order'
+            const subtypeKey = msg.subtype && SUBTYPE_LABEL[msg.subtype] ? msg.subtype : null
+            return (
+              <div
+                key={msg.id}
+                className={`flex items-center gap-3 px-4 py-3 ${!msg.is_read ? 'bg-muted/30' : ''}`}
+              >
+                <span className={`size-2 rounded-full flex-shrink-0 ${!msg.is_read ? 'bg-blue-500' : 'bg-transparent'}`} />
+                <TypeBadge type={msg.type} />
+                {!isOrder && subtypeKey && (
+                  <span
+                    className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide shrink-0 ${SUBTYPE_CLASSES[subtypeKey]}`}
+                  >
+                    {SUBTYPE_LABEL[subtypeKey]}
+                  </span>
+                )}
+                <StoreBadge name={storeMap.get(msg.store_id) ?? 'Unknown'} />
+                <div className="flex-1 min-w-0">
+                  {isOrder ? (
+                    <>
+                      <p className="text-sm font-medium truncate flex items-center gap-2">
+                        {price !== null && (
+                          <span className="text-amber-700 dark:text-amber-400 font-semibold tabular-nums">
+                            ${price.toFixed(2)}
+                          </span>
+                        )}
+                        {msg.country && (
+                          <span className="text-xs text-muted-foreground font-normal">
+                            · {msg.country}
+                          </span>
+                        )}
+                        {msg.order_id && (
+                          <span className="text-xs text-muted-foreground font-mono">
+                            #{msg.order_id}
+                          </span>
+                        )}
+                        {price === null && !msg.order_id && (
+                          <span>{msg.sender_name}</span>
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">{msg.subject}</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm font-medium truncate">{msg.sender_name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{msg.subject}</p>
+                    </>
+                  )}
+                </div>
+                <span className="text-xs text-muted-foreground flex-shrink-0">
+                  {formatDistanceToNow(new Date(msg.received_at), { addSuffix: true })}
+                </span>
+                <Switch
+                  checked={msg.is_read}
+                  onCheckedChange={(checked) => toggleRead.mutate({ id: msg.id, is_read: checked })}
+                  aria-label={msg.is_read ? 'Mark as unread' : 'Mark as read'}
+                />
               </div>
-              <span className="text-xs text-muted-foreground flex-shrink-0">
-                {formatDistanceToNow(new Date(msg.received_at), { addSuffix: true })}
-              </span>
-              <Switch
-                checked={msg.is_read}
-                onCheckedChange={(checked) => toggleRead.mutate({ id: msg.id, is_read: checked })}
-                aria-label={msg.is_read ? 'Mark as unread' : 'Mark as read'}
-              />
-            </div>
-          ))
+            )
+          })
         )}
       </div>
     </section>

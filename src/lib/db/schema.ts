@@ -30,6 +30,10 @@ export const etsy_messages = pgTable('etsy_messages', {
   sender_name: text('sender_name').notNull(),
   subject: text('subject').notNull(),
   type: text('type').notNull().default('message'), // 'message' | 'order'
+  subtype: text('subtype'),                         // messages: 'new' | 'reply' | 'help'
+  price_usd: numeric('price_usd'),                  // orders only
+  country: text('country'),                         // orders only (parsed best-effort)
+  order_id: text('order_id'),                       // orders only (Etsy order #)
   received_at: timestamp('received_at').notNull(),
   is_read: boolean('is_read').notNull().default(false),
   created_at: timestamp('created_at').notNull().defaultNow(),

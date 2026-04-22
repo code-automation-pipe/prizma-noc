@@ -8,6 +8,7 @@ import { decryptCredentials, encryptCredentials } from '@/lib/crypto/credentials
 import { fetchNewEtsyMessages } from '@/lib/imap/client'
 import { resolveAccessToken, type OAuthCredentials } from '@/lib/graph/oauth'
 import { logMessageReceived } from '@/lib/axiom/events'
+import { notifyMessage, notifyOrder } from '@/lib/telegram/client'
 
 export async function GET(request: Request) {
   if (request.headers.get('Authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -52,7 +53,7 @@ export async function GET(request: Request) {
       const newMessages = await fetchNewEtsyMessages(store.outlook_email, imapCreds, since)
 
       for (const msg of newMessages) {
-        await db
+        const inserted = await db
           .insert(etsy_messages)
           .values({
             store_id: store.id,
@@ -60,15 +61,39 @@ export async function GET(request: Request) {
             sender_name: msg.senderName,
             subject: msg.subject,
             type: msg.type,
+            subtype: msg.subtype ?? null,
+            price_usd: msg.priceUsd !== undefined ? String(msg.priceUsd) : null,
+            country: msg.country ?? null,
+            order_id: msg.orderId ?? null,
             received_at: msg.receivedAt,
           })
           .onConflictDoNothing({ target: etsy_messages.message_id })
+          .returning({ id: etsy_messages.id })
+
+        // Only fire side-effects for actually-new rows — avoids duplicate pings on re-polls
+        if (inserted.length === 0) continue
 
         await logMessageReceived({
           store_id: store.id,
           store_name: store.name,
           sender_name: msg.senderName,
         })
+
+        if (msg.type === 'order') {
+          await notifyOrder({
+            shopName: store.name,
+            priceUsd: msg.priceUsd,
+            country: msg.country,
+            orderId: msg.orderId,
+          })
+        } else if (msg.subtype) {
+          await notifyMessage({
+            shopName: store.name,
+            subtype: msg.subtype,
+            senderName: msg.senderName,
+            subject: msg.subject,
+          })
+        }
       }
 
       if (newMessages.length > 0) {

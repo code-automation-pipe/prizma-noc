@@ -1,6 +1,7 @@
 import { ImapFlow } from 'imapflow'
 
 export type EtsyEmailType = 'message' | 'order'
+export type EtsyMessageSubtype = 'new' | 'reply' | 'help'
 
 export interface DetectedEtsyEmail {
   messageId: string
@@ -8,6 +9,10 @@ export interface DetectedEtsyEmail {
   subject: string
   receivedAt: Date
   type: EtsyEmailType
+  subtype?: EtsyMessageSubtype // only set when type === 'message'
+  priceUsd?: number            // only set when type === 'order'
+  orderId?: string             // only set when type === 'order'
+  country?: string             // only set when type === 'order' and parse-able
 }
 
 // Keep old name as alias so nothing else breaks
@@ -27,10 +32,73 @@ function buildAuth(email: string, creds: { appPassword?: string; accessToken?: s
   return { user: email, pass: creds.appPassword! }
 }
 
-function classifySubject(subject: string): EtsyEmailType | null {
-  if (/Re:\s+Etsy Conversation with .+/i.test(subject)) return 'message'
-  if (/new order|order from|you received a new order|order confirmed/i.test(subject)) return 'order'
+interface Classification {
+  type: EtsyEmailType
+  subtype?: EtsyMessageSubtype
+}
+
+function classifySubject(subject: string): Classification | null {
+  // Help request — from conversations@mail.etsy.com when a buyer opens a Help ticket.
+  // Subject variants: "X needs help with an order they placed" or "Help Request: Order #<id>"
+  if (/needs help with an order/i.test(subject) || /help request:\s*order\s*#/i.test(subject)) {
+    return { type: 'message', subtype: 'help' }
+  }
+  // Reply to an ongoing convo
+  if (/^\s*Re:\s+Etsy Conversation with /i.test(subject)) {
+    return { type: 'message', subtype: 'reply' }
+  }
+  // Brand-new convo
+  if (/^\s*Etsy Conversation with /i.test(subject)) {
+    return { type: 'message', subtype: 'new' }
+  }
+  // Orders
+  if (
+    /you made a sale on etsy/i.test(subject) ||
+    /congrats on your first sale/i.test(subject) ||
+    /\border\s*#\d+/i.test(subject)
+  ) {
+    return { type: 'order' }
+  }
   return null
+}
+
+function extractPriceUsd(subject: string): number | undefined {
+  // "[$14.63, Order #4040500317]" → 14.63
+  const m = subject.match(/\$(\d+(?:\.\d{1,2})?)/)
+  return m ? Number(m[1]) : undefined
+}
+
+function extractOrderId(subject: string): string | undefined {
+  const m = subject.match(/Order\s*#\s*(\d+)/i)
+  return m ? m[1] : undefined
+}
+
+/** Best-effort plain-text extraction from raw MIME source. */
+function rawMimeToText(src: Buffer | string): string {
+  const raw = typeof src === 'string' ? src : src.toString('utf8')
+  return raw
+    .replace(/=\r?\n/g, '') // quoted-printable soft line breaks
+    .replace(/=([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/\r/g, '')
+    .replace(/[ \t]+/g, ' ')
+}
+
+/**
+ * Anchor on "Shipping address" and grab the country line — it's always the
+ * last non-empty line before "Purchase Shipping Label" in Etsy order emails.
+ * Returns undefined for first-sale emails (no address block) or if parsing fails.
+ */
+function extractCountry(plainText: string): string | undefined {
+  const idx = plainText.search(/Shipping address/i)
+  if (idx < 0) return undefined
+  const block = plainText.slice(idx, idx + 800)
+  const m = block.match(/\n\s*([A-Z][A-Za-z .'\-]{2,40})\s*\n[\s\S]{0,40}?Purchase Shipping Label/)
+  return m?.[1]?.trim()
 }
 
 /**
@@ -59,20 +127,65 @@ export async function fetchNewEtsyEmails(
       const uids = await client.search({ since })
       if (!uids || !uids.length) return results
 
+      interface Staged {
+        uid: number
+        envelope: { subject: string; messageId: string; fromName: string; date: Date }
+        type: EtsyEmailType
+        subtype?: EtsyMessageSubtype
+      }
+      const staged: Staged[] = []
+
+      // Pass 1: envelope scan + classification
       for await (const msg of client.fetch(uids as number[], { envelope: true })) {
         if (!msg.envelope) continue
         const subject = msg.envelope.subject ?? ''
-        const type = classifySubject(subject)
-        if (!type) continue
+        const cls = classifySubject(subject)
+        if (!cls) continue
 
         const from = msg.envelope.from?.[0]
-        results.push({
-          messageId: msg.envelope.messageId || `imap-uid-${email}-${msg.uid}`,
-          senderName: from?.name || from?.address || 'Unknown',
-          subject,
-          receivedAt: msg.envelope.date ?? new Date(),
-          type,
+        staged.push({
+          uid: msg.uid,
+          envelope: {
+            subject,
+            messageId: msg.envelope.messageId || `imap-uid-${email}-${msg.uid}`,
+            fromName: from?.name || from?.address || 'Unknown',
+            date: msg.envelope.date ?? new Date(),
+          },
+          type: cls.type,
+          subtype: cls.subtype,
         })
+      }
+
+      // Pass 2: for orders only, fetch source to extract country
+      for (const s of staged) {
+        if (s.type === 'order') {
+          let country: string | undefined
+          try {
+            const one = await client.fetchOne(String(s.uid), { source: true }, { uid: true })
+            if (one && one.source) country = extractCountry(rawMimeToText(one.source))
+          } catch {
+            // non-fatal — country stays undefined
+          }
+          results.push({
+            messageId: s.envelope.messageId,
+            senderName: s.envelope.fromName,
+            subject: s.envelope.subject,
+            receivedAt: s.envelope.date,
+            type: 'order',
+            priceUsd: extractPriceUsd(s.envelope.subject),
+            orderId: extractOrderId(s.envelope.subject),
+            country,
+          })
+        } else {
+          results.push({
+            messageId: s.envelope.messageId,
+            senderName: s.envelope.fromName,
+            subject: s.envelope.subject,
+            receivedAt: s.envelope.date,
+            type: 'message',
+            subtype: s.subtype,
+          })
+        }
       }
     } finally {
       lock.release()

@@ -8,13 +8,13 @@ export interface StoreWithStatus {
   shop_id: number
   outlook_email: string
   draft_alert_threshold: number
-  last_draft_count: number        // live: products with uploaded_at IS NULL
+  last_draft_count: number        // live: products with pipeline_status = 'none' OR NULL
   last_draft_snapshot_at: string | null
   created_at: string
   unread_message_count: number
-  published_today: number         // products uploaded to Etsy today (calendar day)
+  published_today: number         // products with completed_at AND uploaded_at >= today
   drafts_made_today: number       // delta: prev snapshot minus current not_processed
-  items_completed_today: number   // worker item_completed events in Axiom, last 24h
+  items_completed_today: number   // products with completed_at >= today
   items_failed_today: number      // worker item_failed events in Axiom, last 24h
   email_screener_connected: boolean // true = IMAP app password is configured
   health: StoreHealth

@@ -52,13 +52,48 @@ export async function getPipelineSpend(): Promise<PipelineSpend> {
 }
 
 /**
- * Returns count of products uploaded (published) to Etsy today (calendar day).
+ * Returns count of products published to Etsy today per shop.
+ * Requires both `completed_at` and `uploaded_at` to fall on the current day.
  */
 export async function getPublishedTodayPerShop(): Promise<DraftCount[]> {
   const rows = await productsSQL`
     SELECT shop_id, COUNT(*)::int AS draft_count
     FROM products
-    WHERE uploaded_at >= DATE_TRUNC('day', NOW())
+    WHERE completed_at >= DATE_TRUNC('day', NOW())
+      AND uploaded_at  >= DATE_TRUNC('day', NOW())
+    GROUP BY shop_id
+  `
+  return rows.map((r) => ({
+    shop_id: Number(r.shop_id),
+    draft_count: Number(r.draft_count),
+  }))
+}
+
+/**
+ * Returns count of products that completed pipeline processing today per shop.
+ */
+export async function getCompletedTodayPerShop(): Promise<DraftCount[]> {
+  const rows = await productsSQL`
+    SELECT shop_id, COUNT(*)::int AS draft_count
+    FROM products
+    WHERE completed_at >= DATE_TRUNC('day', NOW())
+    GROUP BY shop_id
+  `
+  return rows.map((r) => ({
+    shop_id: Number(r.shop_id),
+    draft_count: Number(r.draft_count),
+  }))
+}
+
+/**
+ * Returns count of products that haven't been processed yet per shop.
+ * "Not processed" = pipeline_status is literally 'none' or NULL.
+ */
+export async function getNotProcessedPerShop(): Promise<DraftCount[]> {
+  const rows = await productsSQL`
+    SELECT shop_id, COUNT(*)::int AS draft_count
+    FROM products
+    WHERE pipeline_status = 'none' OR pipeline_status IS NULL
     GROUP BY shop_id
   `
   return rows.map((r) => ({

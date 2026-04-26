@@ -1,7 +1,12 @@
 import { count, desc, eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { api_ledger, etsy_messages, stores, triggered_alerts } from '@/lib/db/schema'
-import { getPublishedTodayPerShop, getPipelineSpend } from '@/lib/db/workers-db'
+import {
+  getPublishedTodayPerShop,
+  getCompletedTodayPerShop,
+  getNotProcessedPerShop,
+  getPipelineSpend,
+} from '@/lib/db/workers-db'
 import { decryptCredentials } from '@/lib/crypto/credentials'
 import { computeStoreHealth } from '@/lib/health'
 import { fetchAxiomStatusCounts } from '@/lib/axiom/balance'
@@ -11,7 +16,18 @@ import type { DashboardData, LedgerSummary, StoreWithStatus } from '@/types'
 export const revalidate = 60
 
 export async function GET() {
-  const [allStores, unreadCounts, recentAlerts, ledgerEntries, pipelineSpend, publishedCounts, axiomStatus, pipelineItemsToday] = await Promise.all([
+  const [
+    allStores,
+    unreadCounts,
+    recentAlerts,
+    ledgerEntries,
+    pipelineSpend,
+    publishedCounts,
+    completedCounts,
+    notProcessedCounts,
+    axiomStatus,
+    pipelineItemsToday,
+  ] = await Promise.all([
     db.query.stores.findMany({
       orderBy: (s, { asc }) => asc(s.name),
     }),
@@ -29,6 +45,8 @@ export async function GET() {
     }),
     getPipelineSpend().catch((e) => { console.error('[workers-db] getPipelineSpend failed:', e); return null }),
     getPublishedTodayPerShop().catch((e) => { console.error('[workers-db] getPublishedTodayPerShop failed:', e); return [] }),
+    getCompletedTodayPerShop().catch((e) => { console.error('[workers-db] getCompletedTodayPerShop failed:', e); return [] }),
+    getNotProcessedPerShop().catch((e) => { console.error('[workers-db] getNotProcessedPerShop failed:', e); return [] }),
     fetchAxiomStatusCounts().catch((e) => { console.error('[axiom-status] failed:', e); return null }),
     fetchPipelineItemsToday().catch((e) => { console.error('[axiom-pipeline] failed:', e); return new Map<number, { completed: number; failed: number }>() }),
   ])
@@ -143,12 +161,15 @@ export async function GET() {
   }
 
   const publishedMap = new Map(publishedCounts.map((p) => [p.shop_id, p.draft_count]))
+  const completedMap = new Map(completedCounts.map((c) => [c.shop_id, c.draft_count]))
+  const notProcessedMap = new Map(notProcessedCounts.map((n) => [n.shop_id, n.draft_count]))
 
   // Build store status list
   const storeList: StoreWithStatus[] = allStores.map((s) => {
     const unreadCount      = unreadMap.get(s.id) ?? 0
-    const notProcessed   = s.last_draft_count  // pipeline writes this directly
+    const notProcessed   = notProcessedMap.get(s.shop_id) ?? 0
     const publishedToday = publishedMap.get(s.shop_id) ?? 0
+    const completedToday = completedMap.get(s.shop_id) ?? 0
     const draftsMadeToday = 0
     const itemStats = pipelineItemsToday.get(s.shop_id) ?? { completed: 0, failed: 0 }
 
@@ -174,7 +195,7 @@ export async function GET() {
       unread_message_count: unreadCount,
       published_today: publishedToday,
       drafts_made_today: draftsMadeToday,
-      items_completed_today: itemStats.completed,
+      items_completed_today: completedToday,
       items_failed_today: itemStats.failed,
       email_screener_connected: emailScreenerConnected,
       health: computeStoreHealth(emailScreenerConnected, notProcessed ?? 0, s.draft_alert_threshold),

@@ -1,5 +1,6 @@
 import { type NextRequest } from 'next/server'
-import { queryAxiom, normalizeAxiomResult, DATASET } from '@/lib/axiom/client'
+import { db } from '@/lib/db'
+import { getPublishedDailyPerShop } from '@/lib/db/workers-db'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,16 +13,18 @@ function parseDays(req: NextRequest, def: number): number {
 export async function GET(request: NextRequest) {
   const days = parseDays(request, 30)
   try {
-    const apl = `
-['${DATASET}']
-| where type == 'products_published'
-| where _time > ago(${days}d)
-| summarize total = max(count) by bin(_time, 1d), store_name
-| order by _time asc
-    `.trim()
+    const [rows, allStores] = await Promise.all([
+      getPublishedDailyPerShop(days),
+      db.query.stores.findMany({ columns: { shop_id: true, name: true } }),
+    ])
+    const nameByShop = new Map(allStores.map((s) => [s.shop_id, s.name]))
 
-    const result = await queryAxiom(apl)
-    return Response.json(normalizeAxiomResult(result))
+    const out = rows.map((r) => ({
+      _time: r.day,
+      store_name: nameByShop.get(r.shop_id) ?? `shop ${r.shop_id}`,
+      total: r.published_count,
+    }))
+    return Response.json(out)
   } catch (err) {
     console.error('[charts/published]', err)
     return Response.json([])

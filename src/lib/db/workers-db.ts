@@ -102,3 +102,35 @@ export async function getNotProcessedPerShop(): Promise<DraftCount[]> {
   }))
 }
 
+export interface PublishedDailyRow {
+  shop_id: number
+  day: string         // ISO date (YYYY-MM-DD) at start of day, UTC
+  published_count: number
+}
+
+/**
+ * Returns daily published counts per shop for the last `days` calendar days.
+ * Same predicate as `getPublishedTodayPerShop` (both completed_at and uploaded_at
+ * must fall on the same day), but binned by day for trend charts.
+ */
+export async function getPublishedDailyPerShop(days: number): Promise<PublishedDailyRow[]> {
+  const safeDays = Math.min(60, Math.max(1, Math.floor(days)))
+  const rows = await productsSQL`
+    SELECT
+      shop_id,
+      DATE_TRUNC('day', completed_at)::date AS day,
+      COUNT(*)::int AS published_count
+    FROM products
+    WHERE completed_at >= DATE_TRUNC('day', NOW()) - (${safeDays}::int - 1) * INTERVAL '1 day'
+      AND uploaded_at IS NOT NULL
+      AND DATE_TRUNC('day', completed_at) = DATE_TRUNC('day', uploaded_at)
+    GROUP BY shop_id, day
+    ORDER BY day ASC
+  `
+  return rows.map((r) => ({
+    shop_id: Number(r.shop_id),
+    day: typeof r.day === 'string' ? r.day : new Date(r.day as Date).toISOString().slice(0, 10),
+    published_count: Number(r.published_count),
+  }))
+}
+

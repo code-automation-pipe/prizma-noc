@@ -141,7 +141,7 @@ export function GraphsSection({ storeNames }: GraphsSectionProps) {
                 <CartesianGrid strokeDasharray="3 3" opacity={0.4} />
                 <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip labelFormatter={formatDate} formatter={(v) => [Number(v).toFixed(0), '']} />
+                <Tooltip labelFormatter={formatDate} formatter={(v, name) => [Number(v).toFixed(0), name]} />
                 <Legend />
                 {draftsStoreNames.slice(0, 10).map((name, i) => (
                   <Line

@@ -12,11 +12,14 @@ function parseDays(req: NextRequest, def: number): number {
 export async function GET(request: NextRequest) {
   const days = parseDays(request, 30)
   try {
+    // Use the latest snapshot per (day, store) instead of averaging — averaging
+    // mixes old-cron values with new-cron values on the day of a metric change,
+    // producing numbers that don't match the live table.
     const apl = `
 ['${DATASET}']
 | where type == 'draft_snapshot'
 | where _time > ago(${days}d)
-| summarize draft_count = avg(draft_count) by bin(_time, 1d), store_name
+| summarize arg_max(_time, draft_count) by bin(_time, 1d), store_name
 | order by _time asc
     `.trim()
 

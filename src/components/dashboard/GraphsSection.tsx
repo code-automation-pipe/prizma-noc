@@ -110,8 +110,8 @@ export function GraphsSection({ storeNames }: GraphsSectionProps) {
       <Tabs defaultValue="published">
         <TabsList className="mb-4 flex-wrap h-auto">
           <TabsTrigger value="published">Published</TabsTrigger>
-          <TabsTrigger value="drafts">Drafts</TabsTrigger>
-          <TabsTrigger value="api-cost-daily">API Cost (Daily)</TabsTrigger>
+          <TabsTrigger value="drafts">Not Processed</TabsTrigger>
+          <TabsTrigger value="api-cost-daily">Google AI Costs (Daily)</TabsTrigger>
           <TabsTrigger value="api-cost-cumulative">API Cost (Cumul.)</TabsTrigger>
           <TabsTrigger value="messages">Messages</TabsTrigger>
           <TabsTrigger value="oxylabs">OxyLabs</TabsTrigger>
@@ -163,12 +163,11 @@ export function GraphsSection({ storeNames }: GraphsSectionProps) {
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={apiCostData?.daily ?? []}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.4} />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${Number(v).toFixed(2)}`} />
-                <Tooltip formatter={(v) => [formatUSD(v), '']} />
+                <Tooltip labelFormatter={formatDate} formatter={(v) => [formatUSD(v), '']} />
                 <Legend />
-                <Bar dataKey="gemini" stackId="a" fill={CHART_COLORS[0]} name="Gemini" />
-                <Bar dataKey="tmapi" stackId="a" fill={CHART_COLORS[1]} name="TMAPI" />
+                <Bar dataKey="gemini" fill={CHART_COLORS[0]} name="Google AI" />
               </BarChart>
             </ResponsiveContainer>
           )}

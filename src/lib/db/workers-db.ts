@@ -108,6 +108,34 @@ export interface PublishedDailyRow {
   published_count: number
 }
 
+export interface DailySpendRow {
+  day: string         // ISO date (YYYY-MM-DD)
+  total_usd: number
+}
+
+/**
+ * Returns daily Gemini (Google AI) spend for the last `days` calendar days,
+ * sourced from products.pipeline_cost_usd grouped by pipeline_ended_at.
+ * This is the same spend value used for "API Spend Today" but binned per day.
+ */
+export async function getGeminiDailySpend(days: number): Promise<DailySpendRow[]> {
+  const safeDays = Math.min(60, Math.max(1, Math.floor(days)))
+  const rows = await productsSQL`
+    SELECT
+      DATE_TRUNC('day', pipeline_ended_at)::date AS day,
+      COALESCE(SUM(pipeline_cost_usd), 0)::float AS total_usd
+    FROM products
+    WHERE pipeline_ended_at >= DATE_TRUNC('day', NOW()) - (${safeDays}::int - 1) * INTERVAL '1 day'
+      AND pipeline_cost_usd IS NOT NULL
+    GROUP BY day
+    ORDER BY day ASC
+  `
+  return rows.map((r) => ({
+    day: typeof r.day === 'string' ? r.day : new Date(r.day as Date).toISOString().slice(0, 10),
+    total_usd: Number(r.total_usd),
+  }))
+}
+
 /**
  * Returns daily published counts per shop for the last `days` calendar days.
  * Same predicate as `getPublishedTodayPerShop` (both completed_at and uploaded_at

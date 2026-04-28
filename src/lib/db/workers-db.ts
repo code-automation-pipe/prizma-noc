@@ -104,13 +104,14 @@ export async function getNotProcessedPerShop(): Promise<DraftCount[]> {
 
 /**
  * Returns count of products that have finished the pipeline and are sitting
- * ready to upload to Etsy per shop. pipeline_status = 'completed'.
+ * ready to upload to Etsy per shop. pipeline_status ≈ 'completed'
+ * (ILIKE so casing drift doesn't silently zero the column).
  */
 export async function getReadyToProcessPerShop(): Promise<DraftCount[]> {
   const rows = await productsSQL`
     SELECT shop_id, COUNT(*)::int AS draft_count
     FROM products
-    WHERE pipeline_status = 'completed'
+    WHERE pipeline_status ILIKE 'completed'
     GROUP BY shop_id
   `
   return rows.map((r) => ({
@@ -121,13 +122,14 @@ export async function getReadyToProcessPerShop(): Promise<DraftCount[]> {
 
 /**
  * Returns count of products that have already been uploaded to Etsy per shop.
- * pipeline_status = 'uploaded'.
+ * pipeline_status ≈ 'Uploaded' (capital U is the actual value in the products
+ * table; ILIKE keeps the count robust to future casing changes).
  */
 export async function getUploadedPerShop(): Promise<DraftCount[]> {
   const rows = await productsSQL`
     SELECT shop_id, COUNT(*)::int AS draft_count
     FROM products
-    WHERE pipeline_status = 'uploaded'
+    WHERE pipeline_status ILIKE 'uploaded'
     GROUP BY shop_id
   `
   return rows.map((r) => ({

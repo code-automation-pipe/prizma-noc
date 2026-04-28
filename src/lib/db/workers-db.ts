@@ -102,6 +102,40 @@ export async function getNotProcessedPerShop(): Promise<DraftCount[]> {
   }))
 }
 
+/**
+ * Returns count of products that have finished the pipeline and are sitting
+ * ready to upload to Etsy per shop. pipeline_status = 'completed'.
+ */
+export async function getReadyToProcessPerShop(): Promise<DraftCount[]> {
+  const rows = await productsSQL`
+    SELECT shop_id, COUNT(*)::int AS draft_count
+    FROM products
+    WHERE pipeline_status = 'completed'
+    GROUP BY shop_id
+  `
+  return rows.map((r) => ({
+    shop_id: Number(r.shop_id),
+    draft_count: Number(r.draft_count),
+  }))
+}
+
+/**
+ * Returns count of products that have already been uploaded to Etsy per shop.
+ * pipeline_status = 'uploaded'.
+ */
+export async function getUploadedPerShop(): Promise<DraftCount[]> {
+  const rows = await productsSQL`
+    SELECT shop_id, COUNT(*)::int AS draft_count
+    FROM products
+    WHERE pipeline_status = 'uploaded'
+    GROUP BY shop_id
+  `
+  return rows.map((r) => ({
+    shop_id: Number(r.shop_id),
+    draft_count: Number(r.draft_count),
+  }))
+}
+
 export interface PublishedDailyRow {
   shop_id: number
   day: string         // ISO date (YYYY-MM-DD) at start of day, UTC

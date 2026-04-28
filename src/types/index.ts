@@ -16,6 +16,8 @@ export interface StoreWithStatus {
   drafts_made_today: number       // delta: prev snapshot minus current not_processed
   items_completed_today: number   // products with completed_at >= today
   items_failed_today: number      // worker item_failed events in Axiom, last 24h
+  ready_to_process: number        // live: products with pipeline_status = 'completed' (post-pipeline, pre-upload)
+  uploaded: number                // live: products with pipeline_status = 'uploaded'
   email_screener_connected: boolean // true = IMAP app password is configured
   health: StoreHealth
 }

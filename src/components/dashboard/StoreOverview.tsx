@@ -21,29 +21,13 @@ const PAGE_SIZE = 20
 
 function HealthIndicator({ health }: { health: StoreWithStatus['health'] }) {
   const configs = {
-    healthy: {
-      dot: 'bg-emerald-500',
-      text: 'text-emerald-600 dark:text-emerald-400',
-      label: 'Healthy',
-    },
-    warning: {
-      dot: 'bg-amber-500',
-      text: 'text-amber-600 dark:text-amber-400',
-      label: 'Warning',
-    },
-    critical: {
-      dot: 'bg-destructive',
-      text: 'text-destructive',
-      label: 'Critical',
-    },
+    healthy:  { dot: 'bg-emerald-500',  label: 'Healthy' },
+    warning:  { dot: 'bg-amber-500',    label: 'Warning' },
+    critical: { dot: 'bg-destructive',  label: 'Critical' },
   } as const
   const c = configs[health]
-  return (
-    <span className={`inline-flex items-center gap-1.5 text-xs font-mono ${c.text}`}>
-      <span className={`size-1.5 rounded-full shrink-0 ${c.dot}`} />
-      {c.label}
-    </span>
-  )
+  // Dot-only — text label kept on the title attribute for hover tooltip.
+  return <span className={`inline-block size-2 rounded-full ${c.dot}`} title={c.label} />
 }
 
 function DraftCount({ count, threshold }: { count: number; threshold: number }) {
@@ -104,10 +88,16 @@ export function StoreOverview({ stores }: StoreOverviewProps) {
                 Not Processed
               </TableHead>
               <TableHead className="text-right text-[10px] font-mono tracking-[0.15em] uppercase text-muted-foreground py-2.5">
+                Ready to Process
+              </TableHead>
+              <TableHead className="text-right text-[10px] font-mono tracking-[0.15em] uppercase text-muted-foreground py-2.5">
+                Uploaded
+              </TableHead>
+              <TableHead className="text-right text-[10px] font-mono tracking-[0.15em] uppercase text-muted-foreground py-2.5">
                 Published Today
               </TableHead>
               <TableHead className="text-right text-[10px] font-mono tracking-[0.15em] uppercase text-muted-foreground py-2.5">
-                Completed Today
+                Pipe Completed Today
               </TableHead>
               <TableHead className="text-right text-[10px] font-mono tracking-[0.15em] uppercase text-muted-foreground py-2.5">
                 Failed Today
@@ -127,7 +117,7 @@ export function StoreOverview({ stores }: StoreOverviewProps) {
             {paginated.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={8}
+                  colSpan={10}
                   className="text-center text-xs font-mono text-muted-foreground py-10"
                 >
                   No stores found
@@ -145,6 +135,20 @@ export function StoreOverview({ stores }: StoreOverviewProps) {
                       count={store.last_draft_count}
                       threshold={store.draft_alert_threshold}
                     />
+                  </TableCell>
+                  <TableCell className="text-right py-3">
+                    <span className={`font-mono tabular-nums text-sm ${
+                      store.ready_to_process > 0
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-muted-foreground'
+                    }`}>
+                      {store.ready_to_process.toLocaleString()}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right py-3">
+                    <span className="font-mono tabular-nums text-sm text-foreground">
+                      {store.uploaded.toLocaleString()}
+                    </span>
                   </TableCell>
                   <TableCell className="text-right py-3">
                     <span className={`font-mono tabular-nums text-sm ${
@@ -184,18 +188,16 @@ export function StoreOverview({ stores }: StoreOverviewProps) {
                   </TableCell>
                   <TableCell className="py-3">
                     {store.email_screener_connected ? (
-                      <span className="inline-flex items-center gap-1.5 text-xs font-mono text-emerald-600 dark:text-emerald-400">
-                        <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
-                        Connected
-                      </span>
+                      <span
+                        className="inline-block size-2 rounded-full bg-emerald-500"
+                        title="Connected"
+                      />
                     ) : (
                       <Link
                         href="/settings"
-                        className="inline-flex items-center gap-1.5 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        <span className="size-1.5 rounded-full bg-muted-foreground/30 shrink-0" />
-                        Set up →
-                      </Link>
+                        className="inline-block size-2 rounded-full bg-muted-foreground/30 hover:bg-muted-foreground transition-colors"
+                        title="Set up email screener"
+                      />
                     )}
                   </TableCell>
                   <TableCell className="py-3">

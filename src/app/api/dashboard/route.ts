@@ -5,6 +5,8 @@ import {
   getPublishedTodayPerShop,
   getCompletedTodayPerShop,
   getNotProcessedPerShop,
+  getReadyToProcessPerShop,
+  getUploadedPerShop,
   getPipelineSpend,
 } from '@/lib/db/workers-db'
 import { decryptCredentials } from '@/lib/crypto/credentials'
@@ -25,6 +27,8 @@ export async function GET() {
     publishedCounts,
     completedCounts,
     notProcessedCounts,
+    readyToProcessCounts,
+    uploadedCounts,
     axiomStatus,
     pipelineItemsToday,
   ] = await Promise.all([
@@ -61,6 +65,8 @@ export async function GET() {
     getPublishedTodayPerShop().catch((e) => { console.error('[workers-db] getPublishedTodayPerShop failed:', e); return [] }),
     getCompletedTodayPerShop().catch((e) => { console.error('[workers-db] getCompletedTodayPerShop failed:', e); return [] }),
     getNotProcessedPerShop().catch((e) => { console.error('[workers-db] getNotProcessedPerShop failed:', e); return [] }),
+    getReadyToProcessPerShop().catch((e) => { console.error('[workers-db] getReadyToProcessPerShop failed:', e); return [] }),
+    getUploadedPerShop().catch((e) => { console.error('[workers-db] getUploadedPerShop failed:', e); return [] }),
     fetchAxiomStatusCounts().catch((e) => { console.error('[axiom-status] failed:', e); return null }),
     fetchPipelineItemsToday().catch((e) => { console.error('[axiom-pipeline] failed:', e); return new Map<number, { completed: number; failed: number }>() }),
   ])
@@ -177,6 +183,8 @@ export async function GET() {
   const publishedMap = new Map(publishedCounts.map((p) => [p.shop_id, p.draft_count]))
   const completedMap = new Map(completedCounts.map((c) => [c.shop_id, c.draft_count]))
   const notProcessedMap = new Map(notProcessedCounts.map((n) => [n.shop_id, n.draft_count]))
+  const readyToProcessMap = new Map(readyToProcessCounts.map((r) => [r.shop_id, r.draft_count]))
+  const uploadedMap = new Map(uploadedCounts.map((u) => [u.shop_id, u.draft_count]))
 
   // Build store status list
   const storeList: StoreWithStatus[] = allStores.map((s) => {
@@ -211,6 +219,8 @@ export async function GET() {
       drafts_made_today: draftsMadeToday,
       items_completed_today: completedToday,
       items_failed_today: itemStats.failed,
+      ready_to_process: readyToProcessMap.get(s.shop_id) ?? 0,
+      uploaded: uploadedMap.get(s.shop_id) ?? 0,
       email_screener_connected: emailScreenerConnected,
       health: computeStoreHealth(emailScreenerConnected, notProcessed ?? 0, s.draft_alert_threshold),
     }

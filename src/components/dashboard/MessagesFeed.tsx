@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
-import { MessageCircle, ShoppingBag } from 'lucide-react'
+import { MessageCircle, ShoppingBag, RotateCcw } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import {
   Select,
@@ -49,9 +49,28 @@ const TYPE_FILTER_OPTIONS = [
   { value: 'all', label: 'All activity' },
   { value: 'message', label: 'Messages only' },
   { value: 'order', label: 'Orders only' },
+  { value: 'refund', label: 'Refunds only' },
 ]
 
+// Stored rows from before refund detection landed are saved with type='order'
+// even when the subject contains "refund" — derive the effective type from
+// the subject so the feed labels them correctly without a backfill migration.
+const REFUND_SUBJECT_RE = /\brefund(?:ed|s|ing)?\b/i
+
+function effectiveType(type: string, subject: string): string {
+  if (type === 'order' && REFUND_SUBJECT_RE.test(subject)) return 'refund'
+  return type
+}
+
 function TypeBadge({ type }: { type: string }) {
+  if (type === 'refund') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-md bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide shrink-0">
+        <RotateCcw className="size-2.5" />
+        Refund
+      </span>
+    )
+  }
   if (type === 'order') {
     return (
       <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide shrink-0">
@@ -92,7 +111,10 @@ export function MessagesFeed({ stores }: MessagesFeedProps) {
     refetchInterval: 2 * 60 * 1000,
   })
 
-  const filtered = typeFilter === 'all' ? messages : messages.filter((m) => m.type === typeFilter)
+  const filtered =
+    typeFilter === 'all'
+      ? messages
+      : messages.filter((m) => effectiveType(m.type, m.subject) === typeFilter)
 
   const toggleRead = useMutation({
     mutationFn: async ({ id, is_read }: { id: string; is_read: boolean }) => {
@@ -120,8 +142,9 @@ export function MessagesFeed({ stores }: MessagesFeedProps) {
   })
 
   const unreadCount = filtered.filter((m) => !m.is_read).length
-  const orderCount = filtered.filter((m) => m.type === 'order').length
-  const messageCount = filtered.filter((m) => m.type === 'message').length
+  const orderCount = filtered.filter((m) => effectiveType(m.type, m.subject) === 'order').length
+  const messageCount = filtered.filter((m) => effectiveType(m.type, m.subject) === 'message').length
+  const refundCount = filtered.filter((m) => effectiveType(m.type, m.subject) === 'refund').length
 
   return (
     <section>
@@ -138,6 +161,12 @@ export function MessagesFeed({ stores }: MessagesFeedProps) {
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 text-xs font-semibold px-2 py-0.5">
                 <ShoppingBag className="size-3" />
                 {orderCount} order{orderCount !== 1 ? 's' : ''}
+              </span>
+            )}
+            {refundCount > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-400 text-xs font-semibold px-2 py-0.5">
+                <RotateCcw className="size-3" />
+                {refundCount} refund{refundCount !== 1 ? 's' : ''}
               </span>
             )}
             {messageCount > 0 && (
@@ -194,16 +223,22 @@ export function MessagesFeed({ stores }: MessagesFeedProps) {
         ) : (
           filtered.map((msg) => {
             const price = msg.price_usd ? Number(msg.price_usd) : null
-            const isOrder = msg.type === 'order'
+            const effType = effectiveType(msg.type, msg.subject)
+            const isOrder = effType === 'order'
+            const isRefund = effType === 'refund'
+            const isOrderLike = isOrder || isRefund
             const subtypeKey = msg.subtype && SUBTYPE_LABEL[msg.subtype] ? msg.subtype : null
+            const priceColor = isRefund
+              ? 'text-rose-700 dark:text-rose-400'
+              : 'text-amber-700 dark:text-amber-400'
             return (
               <div
                 key={msg.id}
                 className={`flex items-center gap-3 px-4 py-3 ${!msg.is_read ? 'bg-muted/30' : ''}`}
               >
                 <span className={`size-2 rounded-full flex-shrink-0 ${!msg.is_read ? 'bg-blue-500' : 'bg-transparent'}`} />
-                <TypeBadge type={msg.type} />
-                {!isOrder && subtypeKey && (
+                <TypeBadge type={effType} />
+                {!isOrderLike && subtypeKey && (
                   <span
                     className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide shrink-0 ${SUBTYPE_CLASSES[subtypeKey]}`}
                   >
@@ -212,12 +247,12 @@ export function MessagesFeed({ stores }: MessagesFeedProps) {
                 )}
                 <StoreBadge name={storeMap.get(msg.store_id) ?? 'Unknown'} />
                 <div className="flex-1 min-w-0">
-                  {isOrder ? (
+                  {isOrderLike ? (
                     <>
                       <p className="text-sm font-medium truncate flex items-center gap-2">
                         {price !== null && (
-                          <span className="text-amber-700 dark:text-amber-400 font-semibold tabular-nums">
-                            ${price.toFixed(2)}
+                          <span className={`font-semibold tabular-nums ${priceColor}`}>
+                            {isRefund ? '−' : ''}${price.toFixed(2)}
                           </span>
                         )}
                         {msg.country && (

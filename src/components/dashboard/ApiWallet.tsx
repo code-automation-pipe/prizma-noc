@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Plus, RefreshCw } from 'lucide-react'
@@ -99,6 +99,24 @@ export function ApiWallet({ ledger }: ApiWalletProps) {
     },
     onError: () => toast.error('Failed to refresh balances'),
   })
+
+  // Auto-trigger Fetch Balances once per browser tab on first dashboard load,
+  // so visitors see fresh numbers without clicking. Throttled with sessionStorage
+  // (5-minute window) to avoid hammering the cron endpoints on quick reloads.
+  const autoFiredRef = useRef(false)
+  useEffect(() => {
+    if (autoFiredRef.current) return
+    autoFiredRef.current = true
+    try {
+      const last = Number(sessionStorage.getItem('apiWallet:lastAutoFetch') ?? 0)
+      if (Date.now() - last < 5 * 60_000) return
+      sessionStorage.setItem('apiWallet:lastAutoFetch', String(Date.now()))
+    } catch {
+      // sessionStorage unavailable (private mode, SSR) — fall through and fire once
+    }
+    refreshMutation.mutate()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const mutation = useMutation({
     mutationFn: async () => {

@@ -55,6 +55,12 @@ export function GraphsSection({ storeNames }: GraphsSectionProps) {
     staleTime: 5 * 60 * 1000,
   })
 
+  const { data: ordersData = [], isLoading: ordersLoading } = useQuery<Record<string, unknown>[]>({
+    queryKey: ['charts', 'orders', days],
+    queryFn: () => fetch(`/api/charts/orders?days=${days}`).then((r) => r.json()),
+    staleTime: 5 * 60 * 1000,
+  })
+
   const { data: draftsData = [], isLoading: draftsLoading } = useQuery<Record<string, unknown>[]>({
     queryKey: ['charts', 'drafts', days],
     queryFn: () => fetch(`/api/charts/drafts?days=${days}`).then((r) => r.json()),
@@ -80,10 +86,12 @@ export function GraphsSection({ storeNames }: GraphsSectionProps) {
   const publishedStoreNames = [...new Set(publishedData.map((d) => String(d.store_name ?? '')))].filter((n) => n && storeNameSet.has(n))
   const msgStoreNames = [...new Set(messagesData.map((d) => String(d.store_name ?? '')))].filter((n) => n && storeNameSet.has(n))
   const draftsStoreNames = [...new Set(draftsData.map((d) => String(d.store_name ?? '')))].filter((n) => n && storeNameSet.has(n))
+  const ordersStoreNames = [...new Set(ordersData.map((d) => String(d.store_name ?? '')))].filter((n) => n && storeNameSet.has(n))
 
   const publishedByTime = groupByTime(publishedData, '_time', 'store_name', 'total')
   const messagesByTime = groupByTime(messagesData, '_time', 'store_name', 'message_count')
   const draftsByTime = groupByTime(draftsData, '_time', 'store_name', 'draft_count')
+  const ordersByTime = groupByTime(ordersData, '_time', 'store_name', 'order_count')
 
   return (
     <section>
@@ -110,6 +118,7 @@ export function GraphsSection({ storeNames }: GraphsSectionProps) {
       <Tabs defaultValue="published">
         <TabsList className="mb-4 flex-wrap h-auto">
           <TabsTrigger value="published">Published</TabsTrigger>
+          <TabsTrigger value="orders">Orders</TabsTrigger>
           <TabsTrigger value="drafts">Not Processed</TabsTrigger>
           <TabsTrigger value="api-cost-daily">Google AI Costs (Daily)</TabsTrigger>
           <TabsTrigger value="api-cost-cumulative">API Cost (Cumul.)</TabsTrigger>
@@ -127,6 +136,27 @@ export function GraphsSection({ storeNames }: GraphsSectionProps) {
                 <Tooltip labelFormatter={formatDate} />
                 <Legend />
                 {publishedStoreNames.slice(0, 10).map((name, i) => (
+                  <Bar key={name} dataKey={name} stackId="a" fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </TabsContent>
+
+        <TabsContent value="orders">
+          {ordersLoading ? <ChartSkeleton /> : ordersByTime.length === 0 ? (
+            <div className="text-center text-muted-foreground py-10 text-sm">
+              No orders in the selected window
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={ordersByTime}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.4} />
+                <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                <Tooltip labelFormatter={formatDate} />
+                <Legend />
+                {ordersStoreNames.slice(0, 10).map((name, i) => (
                   <Bar key={name} dataKey={name} stackId="a" fill={CHART_COLORS[i % CHART_COLORS.length]} />
                 ))}
               </BarChart>

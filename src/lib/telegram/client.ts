@@ -56,6 +56,19 @@ export async function notifyOrder(o: OrderNotification): Promise<void> {
   await sendTelegram(parts.join('\n'))
 }
 
+export interface RefundNotification {
+  shopName: string
+  priceUsd?: number
+  orderId?: string
+}
+
+export async function notifyRefund(r: RefundNotification): Promise<void> {
+  const parts = [`↩️ <b>Refund issued</b> — ${escapeHtml(r.shopName)}`]
+  if (typeof r.priceUsd === 'number') parts.push(`−$${r.priceUsd.toFixed(2)}`)
+  if (r.orderId) parts.push(`Order #${escapeHtml(r.orderId)}`)
+  await sendTelegram(parts.join('\n'))
+}
+
 export interface MessageNotification {
   shopName: string
   subtype: 'new' | 'reply' | 'help'

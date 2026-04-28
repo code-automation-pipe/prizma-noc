@@ -1,6 +1,6 @@
 import { ImapFlow } from 'imapflow'
 
-export type EtsyEmailType = 'message' | 'order'
+export type EtsyEmailType = 'message' | 'order' | 'refund'
 export type EtsyMessageSubtype = 'new' | 'reply' | 'help'
 
 export interface DetectedEtsyEmail {
@@ -50,6 +50,11 @@ function classifySubject(subject: string): Classification | null {
   // Brand-new convo
   if (/^\s*Etsy Conversation with /i.test(subject)) {
     return { type: 'message', subtype: 'new' }
+  }
+  // Refund — must come BEFORE the order check, since refund emails also contain
+  // "Order #<id>" in the subject (e.g. "[$14.63, Order #4040500317] You issued a refund").
+  if (/\brefund(?:ed|s|ing)?\b/i.test(subject)) {
+    return { type: 'refund' }
   }
   // Orders
   if (
@@ -156,7 +161,7 @@ export async function fetchNewEtsyEmails(
         })
       }
 
-      // Pass 2: for orders only, fetch source to extract country
+      // Pass 2: for orders/refunds, fetch source to extract country (orders only)
       for (const s of staged) {
         if (s.type === 'order') {
           let country: string | undefined
@@ -175,6 +180,16 @@ export async function fetchNewEtsyEmails(
             priceUsd: extractPriceUsd(s.envelope.subject),
             orderId: extractOrderId(s.envelope.subject),
             country,
+          })
+        } else if (s.type === 'refund') {
+          results.push({
+            messageId: s.envelope.messageId,
+            senderName: s.envelope.fromName,
+            subject: s.envelope.subject,
+            receivedAt: s.envelope.date,
+            type: 'refund',
+            priceUsd: extractPriceUsd(s.envelope.subject),
+            orderId: extractOrderId(s.envelope.subject),
           })
         } else {
           results.push({

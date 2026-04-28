@@ -5,7 +5,7 @@ import { decryptCredentials, encryptCredentials } from '../src/lib/crypto/creden
 import { fetchNewEtsyMessages } from '../src/lib/imap/client'
 import { resolveAccessToken, type OAuthCredentials } from '../src/lib/graph/oauth'
 import { logMessageReceived } from '../src/lib/axiom/events'
-import { notifyMessage, notifyOrder } from '../src/lib/telegram/client'
+import { notifyMessage, notifyOrder, notifyRefund } from '../src/lib/telegram/client'
 
 // Widen the default window so we catch yesterday's order even if the store
 // already has prior messages. Accept `HOURS_BACK` env override (default 72h).
@@ -65,7 +65,12 @@ async function main() {
           console.log(`    [dup] ${msg.type} — ${msg.subject.slice(0, 80)}`)
           continue
         }
-        const tag = msg.type === 'order' ? `ORDER $${msg.priceUsd ?? '?'} ${msg.country ?? ''}` : `MSG/${msg.subtype ?? '?'}`
+        const tag =
+          msg.type === 'order'
+            ? `ORDER $${msg.priceUsd ?? '?'} ${msg.country ?? ''}`
+            : msg.type === 'refund'
+              ? `REFUND $${msg.priceUsd ?? '?'}`
+              : `MSG/${msg.subtype ?? '?'}`
         console.log(`    [new] ${tag} — ${msg.subject.slice(0, 80)}`)
 
         await logMessageReceived({
@@ -79,6 +84,12 @@ async function main() {
             shopName: store.name,
             priceUsd: msg.priceUsd,
             country: msg.country,
+            orderId: msg.orderId,
+          })
+        } else if (msg.type === 'refund') {
+          await notifyRefund({
+            shopName: store.name,
+            priceUsd: msg.priceUsd,
             orderId: msg.orderId,
           })
         } else if (msg.subtype) {

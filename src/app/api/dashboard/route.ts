@@ -1,6 +1,6 @@
 import { count, desc, eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { api_ledger, etsy_messages, stores, triggered_alerts } from '@/lib/db/schema'
+import { alert_rules, api_ledger, etsy_messages, stores, triggered_alerts } from '@/lib/db/schema'
 import {
   getPublishedTodayPerShop,
   getCompletedTodayPerShop,
@@ -36,10 +36,24 @@ export async function GET() {
       .from(etsy_messages)
       .where(eq(etsy_messages.is_read, false))
       .groupBy(etsy_messages.store_id),
-    db.query.triggered_alerts.findMany({
-      orderBy: desc(triggered_alerts.triggered_at),
-      limit: 50,
-    }),
+    db
+      .select({
+        id: triggered_alerts.id,
+        rule_id: triggered_alerts.rule_id,
+        store_id: triggered_alerts.store_id,
+        message: triggered_alerts.message,
+        triggered_at: triggered_alerts.triggered_at,
+        rule_id_full: alert_rules.id,
+        rule_store_id: alert_rules.store_id,
+        rule_service: alert_rules.service,
+        rule_type: alert_rules.rule_type,
+        rule_threshold: alert_rules.threshold,
+        rule_enabled: alert_rules.enabled,
+      })
+      .from(triggered_alerts)
+      .leftJoin(alert_rules, eq(alert_rules.id, triggered_alerts.rule_id))
+      .orderBy(desc(triggered_alerts.triggered_at))
+      .limit(50),
     db.query.api_ledger.findMany({
       orderBy: desc(api_ledger.created_at),
     }),
@@ -211,7 +225,16 @@ export async function GET() {
       store_id: a.store_id ?? null,
       message: a.message,
       triggered_at: a.triggered_at.toISOString(),
-      rule: null, // rule details fetched separately if needed
+      rule: a.rule_id_full
+        ? {
+            id: a.rule_id_full,
+            store_id: a.rule_store_id,
+            service: a.rule_service,
+            rule_type: a.rule_type as string,
+            threshold: a.rule_threshold as string,
+            enabled: a.rule_enabled as boolean,
+          }
+        : null,
     })),
     last_refreshed: new Date().toISOString(),
   }

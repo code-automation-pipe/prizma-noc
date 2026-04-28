@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import { AlertTriangle, AlertCircle, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import type { TriggeredAlertWithRule } from '@/types'
+import type { AlertRuleWithMeta, TriggeredAlertWithRule } from '@/types'
 
 interface AlertsFeedProps {
   alerts: TriggeredAlertWithRule[]
@@ -30,15 +30,34 @@ export function AlertsFeed({ alerts: initialAlerts }: AlertsFeedProps) {
     initialData: page === 1 ? initialAlerts : undefined,
   })
 
+  // Distinguish "no alerts have triggered yet" from "no rules are configured" —
+  // an empty alerts list with zero rules means the engine has nothing to evaluate,
+  // and the user needs to seed defaults via scripts/seed-alert-rules.ts.
+  const { data: rules = [] } = useQuery<AlertRuleWithMeta[]>({
+    queryKey: ['alert-rules'],
+    queryFn: () => fetch('/api/alerts/rules').then((r) => r.json()),
+    staleTime: 60_000,
+  })
+  const hasRules = rules.length > 0
+
   return (
     <section>
       <h2 className="text-lg font-semibold mb-3">Alerts Feed</h2>
 
       <div className="rounded-md border divide-y">
         {alerts.length === 0 ? (
-          <div className="text-center text-muted-foreground py-8 text-sm">
-            No alerts triggered
-          </div>
+          hasRules ? (
+            <div className="text-center text-muted-foreground py-8 text-sm">
+              No alerts triggered — {rules.filter((r) => r.enabled).length} rule(s) active
+            </div>
+          ) : (
+            <div className="text-center text-muted-foreground py-8 text-sm space-y-1">
+              <p>No alert rules configured</p>
+              <p className="text-xs">
+                Seed defaults: <code className="font-mono">npx dotenv -e .env.local -- npx tsx scripts/seed-alert-rules.ts</code>
+              </p>
+            </div>
+          )
         ) : (
           alerts.map((alert) => {
             const ruleType = alert.rule?.rule_type ?? 'unknown'

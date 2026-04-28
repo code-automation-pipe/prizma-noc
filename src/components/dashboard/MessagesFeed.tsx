@@ -57,6 +57,16 @@ const TYPE_FILTER_OPTIONS = [
 // the subject so the feed labels them correctly without a backfill migration.
 const REFUND_SUBJECT_RE = /\brefund(?:ed|s|ing)?\b/i
 
+// Etsy platform billing/charge emails ("Etsy charge refund", "Etsy bill ...") —
+// these were ingested before the IMAP classifier learned to skip them; hide
+// them from the feed so old rows stop appearing.
+const PLATFORM_BILLING_SUBJECT_RE = /^\s*(?:etsy\s+(?:charge|bill|invoice|fee))/i
+const PLATFORM_BILLING_SENDER_RE = /etsy\s+billing/i
+
+function isPlatformBilling(m: Pick<Message, 'subject' | 'sender_name'>): boolean {
+  return PLATFORM_BILLING_SUBJECT_RE.test(m.subject) || PLATFORM_BILLING_SENDER_RE.test(m.sender_name)
+}
+
 function effectiveType(type: string, subject: string): string {
   if (type === 'order' && REFUND_SUBJECT_RE.test(subject)) return 'refund'
   return type
@@ -105,11 +115,15 @@ export function MessagesFeed({ stores }: MessagesFeedProps) {
   const queryParams = new URLSearchParams({ limit: '100' })
   if (storeFilter !== 'all') queryParams.set('store_id', storeFilter)
 
-  const { data: messages = [], isLoading } = useQuery<Message[]>({
+  const { data: rawMessages = [], isLoading } = useQuery<Message[]>({
     queryKey: ['messages', storeFilter],
     queryFn: () => fetch(`/api/messages?${queryParams}`).then((r) => r.json()),
     refetchInterval: 2 * 60 * 1000,
   })
+
+  // Strip platform-billing rows that may already be in the DB from before the
+  // IMAP classifier learned to skip them.
+  const messages = rawMessages.filter((m) => !isPlatformBilling(m))
 
   const filtered =
     typeFilter === 'all'

@@ -37,7 +37,17 @@ interface Classification {
   subtype?: EtsyMessageSubtype
 }
 
+// Etsy platform billing/charge emails — NOT customer activity. We skip these
+// outright so they don't appear in the activity feed. Examples seen in the wild:
+//   "Etsy charge refund"
+//   "Etsy bill payment receipt"
+//   "Your Etsy bill is ready"
+const PLATFORM_BILLING_RE = /^\s*(?:etsy\s+(?:charge|bill|invoice|fee))/i
+
 function classifySubject(subject: string): Classification | null {
+  // Skip platform billing first — these subjects often contain "refund" or "Order #"
+  // and would otherwise be misclassified as customer refunds/orders.
+  if (PLATFORM_BILLING_RE.test(subject)) return null
   // Help request — from conversations@mail.etsy.com when a buyer opens a Help ticket.
   // Subject variants: "X needs help with an order they placed" or "Help Request: Order #<id>"
   if (/needs help with an order/i.test(subject) || /help request:\s*order\s*#/i.test(subject)) {

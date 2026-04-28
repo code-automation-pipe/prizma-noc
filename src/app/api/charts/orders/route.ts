@@ -1,5 +1,5 @@
 import { type NextRequest } from 'next/server'
-import { sql } from 'drizzle-orm'
+import { and, eq, gt, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { etsy_messages, stores } from '@/lib/db/schema'
 
@@ -14,6 +14,8 @@ function parseDays(req: NextRequest, def: number): number {
 export async function GET(request: NextRequest) {
   const days = parseDays(request, 30)
   try {
+    const since = new Date(Date.now() - days * 86_400_000)
+
     const rows = await db
       .select({
         day: sql<string>`to_char(date_trunc('day', ${etsy_messages.received_at}) AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
@@ -22,15 +24,22 @@ export async function GET(request: NextRequest) {
         revenue_usd: sql<string>`coalesce(sum(${etsy_messages.price_usd}), 0)::text`,
       })
       .from(etsy_messages)
-      .innerJoin(stores, sql`${stores.id} = ${etsy_messages.store_id}`)
+      .innerJoin(stores, eq(stores.id, etsy_messages.store_id))
       .where(
-        // Exclude rows whose subject indicates a refund — historical rows from
-        // before refund detection landed are stored with type='order' but have
-        // "refund" in the subject. Going forward these come in as type='refund'
-        // and are filtered by the type check.
-        sql`${etsy_messages.type} = 'order' AND ${etsy_messages.subject} !~* '\\mrefund' AND ${etsy_messages.received_at} > now() - (${days} || ' days')::interval`,
+        and(
+          eq(etsy_messages.type, 'order'),
+          // Exclude rows whose subject indicates a refund — historical rows from
+          // before refund detection landed are stored with type='order' but have
+          // "refund" in the subject. New rows come in as type='refund' and are
+          // already excluded by the type check.
+          sql`${etsy_messages.subject} !~* '\\mrefund'`,
+          gt(etsy_messages.received_at, since),
+        ),
       )
-      .groupBy(sql`1`, stores.name)
+      .groupBy(
+        sql`to_char(date_trunc('day', ${etsy_messages.received_at}) AT TIME ZONE 'UTC', 'YYYY-MM-DD')`,
+        stores.name,
+      )
       .orderBy(sql`1 asc`)
 
     const out = rows.map((r) => ({

@@ -61,6 +61,12 @@ export function GraphsSection({ storeNames }: GraphsSectionProps) {
     staleTime: 5 * 60 * 1000,
   })
 
+  const { data: refundsData = [], isLoading: refundsLoading } = useQuery<Record<string, unknown>[]>({
+    queryKey: ['charts', 'refunds', days],
+    queryFn: () => fetch(`/api/charts/refunds?days=${days}`).then((r) => r.json()),
+    staleTime: 5 * 60 * 1000,
+  })
+
   const { data: draftsData = [], isLoading: draftsLoading } = useQuery<Record<string, unknown>[]>({
     queryKey: ['charts', 'drafts', days],
     queryFn: () => fetch(`/api/charts/drafts?days=${days}`).then((r) => r.json()),
@@ -87,11 +93,13 @@ export function GraphsSection({ storeNames }: GraphsSectionProps) {
   const msgStoreNames = [...new Set(messagesData.map((d) => String(d.store_name ?? '')))].filter((n) => n && storeNameSet.has(n))
   const draftsStoreNames = [...new Set(draftsData.map((d) => String(d.store_name ?? '')))].filter((n) => n && storeNameSet.has(n))
   const ordersStoreNames = [...new Set(ordersData.map((d) => String(d.store_name ?? '')))].filter((n) => n && storeNameSet.has(n))
+  const refundsStoreNames = [...new Set(refundsData.map((d) => String(d.store_name ?? '')))].filter((n) => n && storeNameSet.has(n))
 
   const publishedByTime = groupByTime(publishedData, '_time', 'store_name', 'total')
   const messagesByTime = groupByTime(messagesData, '_time', 'store_name', 'message_count')
   const draftsByTime = groupByTime(draftsData, '_time', 'store_name', 'draft_count')
   const ordersByTime = groupByTime(ordersData, '_time', 'store_name', 'order_count')
+  const refundsByTime = groupByTime(refundsData, '_time', 'store_name', 'refund_count')
 
   return (
     <section>
@@ -119,6 +127,7 @@ export function GraphsSection({ storeNames }: GraphsSectionProps) {
         <TabsList className="mb-4 flex-wrap h-auto">
           <TabsTrigger value="published">Published</TabsTrigger>
           <TabsTrigger value="orders">Orders</TabsTrigger>
+          <TabsTrigger value="refunds">Refunds</TabsTrigger>
           <TabsTrigger value="drafts">Not Processed</TabsTrigger>
           <TabsTrigger value="api-cost-daily">Google AI Costs (Daily)</TabsTrigger>
           <TabsTrigger value="api-cost-cumulative">API Cost (Cumul.)</TabsTrigger>
@@ -157,6 +166,27 @@ export function GraphsSection({ storeNames }: GraphsSectionProps) {
                 <Tooltip labelFormatter={formatDate} />
                 <Legend />
                 {ordersStoreNames.slice(0, 10).map((name, i) => (
+                  <Bar key={name} dataKey={name} stackId="a" fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </TabsContent>
+
+        <TabsContent value="refunds">
+          {refundsLoading ? <ChartSkeleton /> : refundsByTime.length === 0 ? (
+            <div className="text-center text-muted-foreground py-10 text-sm">
+              No refunds in the selected window
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={refundsByTime}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.4} />
+                <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                <Tooltip labelFormatter={formatDate} />
+                <Legend />
+                {refundsStoreNames.slice(0, 10).map((name, i) => (
                   <Bar key={name} dataKey={name} stackId="a" fill={CHART_COLORS[i % CHART_COLORS.length]} />
                 ))}
               </BarChart>
@@ -213,7 +243,6 @@ export function GraphsSection({ storeNames }: GraphsSectionProps) {
                 <Tooltip formatter={(v) => [formatUSD(v), '']} />
                 <Legend />
                 <Line type="monotone" dataKey="gemini_cumulative" stroke={CHART_COLORS[0]} dot={false} name="Gemini" />
-                <Line type="monotone" dataKey="tmapi_cumulative" stroke={CHART_COLORS[1]} dot={false} name="TMAPI" />
               </LineChart>
             </ResponsiveContainer>
           )}

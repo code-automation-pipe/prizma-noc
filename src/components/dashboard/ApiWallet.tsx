@@ -30,8 +30,6 @@ interface ApiWalletProps {
 const SERVICES = [
   { key: 'oxylabs', label: 'OxyLabs', isLive: true, noBalance: true, displayMode: 'usd' as const },
   { key: 'gemini', label: 'Google AI Studio', isLive: true, noBalance: false, displayMode: 'gemini' as const },
-  { key: 'tmapi', label: 'TMAPI / 1688', isLive: true, noBalance: false, displayMode: 'usd' as const },
-  { key: 'axiom', label: 'Axiom', isLive: true, noBalance: false, displayMode: 'usd' as const },
 ] as const
 
 function relativeTime(iso: string | null): string {
@@ -48,40 +46,9 @@ function relativeTime(iso: string | null): string {
   return `${d}d ago`
 }
 
-function StatusRow({
-  label,
-  count,
-  last,
-  dot,
-  text,
-}: {
-  label: string
-  count: number
-  last: string | null
-  dot: string
-  text: string
-}) {
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <span className={`inline-flex items-center gap-1.5 text-[10px] font-mono ${text}`}>
-        <span className={`size-1.5 rounded-full shrink-0 ${dot}`} />
-        {label}
-      </span>
-      <span className="flex items-baseline gap-1.5">
-        <span className={`font-mono font-bold tabular-nums text-sm ${text}`}>
-          {count.toLocaleString()}
-        </span>
-        <span className="text-[9px] font-mono text-muted-foreground tabular-nums">
-          {relativeTime(last)}
-        </span>
-      </span>
-    </div>
-  )
-}
-
 export function ApiWallet({ ledger }: ApiWalletProps) {
   const [open, setOpen] = useState(false)
-  const [service, setService] = useState<'gemini' | 'tmapi' | 'axiom'>('gemini')
+  const [service, setService] = useState<'gemini'>('gemini')
   const [entryType, setEntryType] = useState<'topup' | 'free_credit' | 'spend'>('spend')
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
@@ -175,8 +142,6 @@ export function ApiWallet({ ledger }: ApiWalletProps) {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="gemini">Google AI Studio</SelectItem>
-                      <SelectItem value="tmapi">TMAPI / 1688</SelectItem>
-                      <SelectItem value="axiom">Axiom</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -246,9 +211,7 @@ export function ApiWallet({ ledger }: ApiWalletProps) {
           const monthlyReqs = svc.noBalance ? (ledger.monthly_requests?.[svc.key] ?? null) : null
           const planLimit = svc.noBalance ? (ledger.plan_limits?.[svc.key] ?? null) : null
           const usedPct = planLimit && monthlyReqs !== null ? Math.round((monthlyReqs / planLimit) * 100) : null
-          const isLow = !isGemini && svc.key !== 'tmapi' && balance !== null && balance < 10
-          const axiomStatus = svc.key === 'axiom' ? ledger.axiom_status ?? null : null
-          const tmapiStatus = svc.key === 'tmapi' ? ledger.service_status?.tmapi ?? null : null
+          const isLow = !isGemini && balance !== null && balance < 10
 
           return (
             <div
@@ -335,74 +298,6 @@ export function ApiWallet({ ledger }: ApiWalletProps) {
                       <p className="text-[10px] text-muted-foreground">press fetch to load</p>
                     )}
                   </div>
-                </div>
-              ) : svc.key === 'tmapi' ? (
-                <div className="flex flex-col gap-1">
-                  {tmapiStatus ? (() => {
-                    const label =
-                      tmapiStatus.state === 'active' ? 'Active'
-                      : tmapiStatus.state === 'token_expired' ? 'Active'
-                      : 'Inactive'
-                    const colorClass =
-                      tmapiStatus.state === 'active'
-                        ? 'text-emerald-600 dark:text-emerald-400'
-                        : tmapiStatus.state === 'token_expired'
-                          ? 'text-amber-600 dark:text-amber-400'
-                          : 'text-destructive'
-                    const subtitle =
-                      tmapiStatus.state === 'active' ? 'endpoint responding'
-                      : tmapiStatus.state === 'token_expired' ? 'service reachable · token expired'
-                      : (tmapiStatus.reason ?? 'unreachable')
-                    return (
-                      <>
-                        <p className={`text-2xl font-mono font-bold ${colorClass}`}>{label}</p>
-                        <div className="space-y-0.5">
-                          <p className="text-[10px] text-muted-foreground">{subtitle}</p>
-                          <p className="text-[10px] font-mono text-muted-foreground">
-                            checked {relativeTime(tmapiStatus.last)}
-                          </p>
-                          <p className="text-[10px] font-mono text-muted-foreground">
-                            today: ${dailySpend.toFixed(2)}
-                          </p>
-                        </div>
-                      </>
-                    )
-                  })() : (
-                    <>
-                      <p className="text-2xl font-mono text-muted-foreground">—</p>
-                      <p className="text-[10px] text-muted-foreground">no status yet</p>
-                    </>
-                  )}
-                </div>
-              ) : svc.key === 'axiom' ? (
-                <div className="flex flex-col gap-1.5">
-                  {axiomStatus ? (
-                    <>
-                      <StatusRow
-                        label="Completed"
-                        count={axiomStatus.completed.count}
-                        last={axiomStatus.completed.last}
-                        dot="bg-emerald-500"
-                        text="text-emerald-600 dark:text-emerald-400"
-                      />
-                      <StatusRow
-                        label="Error"
-                        count={axiomStatus.error.count}
-                        last={axiomStatus.error.last}
-                        dot="bg-destructive"
-                        text="text-destructive"
-                      />
-                      <StatusRow
-                        label="Running"
-                        count={axiomStatus.running.count}
-                        last={axiomStatus.running.last}
-                        dot="bg-amber-500"
-                        text="text-amber-600 dark:text-amber-400"
-                      />
-                    </>
-                  ) : (
-                    <p className="text-[10px] text-muted-foreground font-mono">no axiom data</p>
-                  )}
                 </div>
               ) : (
                 <div className="flex flex-col gap-1">

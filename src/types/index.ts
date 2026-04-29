@@ -29,7 +29,7 @@ export interface PipelineItemStats {
 }
 
 export interface ApiWalletService {
-  service: 'oxylabs' | 'gemini' | 'tmapi'
+  service: 'oxylabs' | 'gemini'
   label: string
   balance: number | null // null = not available (OxyLabs)
   daily_spend: number
@@ -51,18 +51,6 @@ export interface LedgerSummary {
   monthly_requests: Record<string, number>
   /** Plan limits — from env vars (e.g. OXYLABS_MONTHLY_LIMIT) */
   plan_limits: Record<string, number>
-  /** Axiom log status breakdown — counts + last-seen timestamps */
-  axiom_status?: {
-    completed: { count: number; last: string | null }
-    error: { count: number; last: string | null }
-    running: { count: number; last: string | null }
-  }
-  /** Active/inactive status per service, derived from the latest balance_snapshot note. */
-  service_status?: Record<string, {
-    state: 'active' | 'token_expired' | 'inactive'
-    last: string | null
-    reason?: string
-  }>
 }
 
 export interface AlertRuleWithMeta {

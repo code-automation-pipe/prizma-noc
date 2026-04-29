@@ -34,7 +34,7 @@ export async function GET() {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, svcData]) => ({ date, ...svcData }))
 
-  const services = ['gemini', 'tmapi'] as const
+  const services = ['gemini'] as const
   const runningTotals: Record<string, number> = {}
   const cumulativeRows = ledgerRows.map((row) => {
     const cum: Record<string, unknown> = { date: row.date }

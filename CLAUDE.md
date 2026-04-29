@@ -69,7 +69,7 @@ alert_rules       — id, store_id (nullable=global), service, rule_type,
 
 triggered_alerts  — id, rule_id, store_id, message, triggered_at
 
-api_ledger        — id, service (gemini|tmapi|modal), entry_type (topup|spend),
+api_ledger        — id, service (gemini|modal), entry_type (topup|spend),
                     amount, note
 ```
 
@@ -99,7 +99,6 @@ All cron routes validate: `Authorization: Bearer {CRON_SECRET}`.
 |---------|--------|---------|
 | OxyLabs | Live (hourly) | `GET https://data.oxylabs.io/v2/stats?group_by=day` · Basic Auth |
 | Google AI Studio | Manual ledger | No balance API — user logs topups/spend |
-| TMAPI / 1688 | Manual ledger | No balance API |
 | Modal (GPU) | Manual ledger | No balance API |
 | Outlook | Microsoft Graph | `GET /v1.0/users/{email}/mailFolders/Inbox/messages` · client credentials |
 

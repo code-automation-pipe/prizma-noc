@@ -22,11 +22,9 @@ const DEFAULTS: DefaultRule[] = [
 
   // API balance floors — fire when balance dips below threshold.
   { rule_type: 'api_balance',     service: 'gemini',  threshold: 5,    description: 'gemini balance < $5' },
-  { rule_type: 'api_balance',     service: 'tmapi',   threshold: 5,    description: 'tmapi balance < $5' },
 
   // Daily spend ceiling — fire when daily spend on a service exceeds $X.
   { rule_type: 'api_budget',      service: 'gemini',  threshold: 25,   description: 'gemini daily spend > $25' },
-  { rule_type: 'api_budget',      service: 'tmapi',   threshold: 25,   description: 'tmapi daily spend > $25' },
 
   // Engagement — alert when a store goes 24h without publishing.
   { rule_type: 'zero_publishing', service: null,      threshold: 24,   description: 'zero published items in last 24h' },

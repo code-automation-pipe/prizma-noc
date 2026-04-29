@@ -88,3 +88,26 @@ export async function notifyMessage(m: MessageNotification): Promise<void> {
   if (m.subject) parts.push(escapeHtml(m.subject))
   await sendTelegram(parts.join('\n'))
 }
+
+export async function notifyZeroPublishing(
+  shopNames: string[],
+  totalStores: number,
+): Promise<void> {
+  if (shopNames.length === 0) {
+    await sendTelegram(
+      `✅ <b>All stores publishing</b> — ${totalStores} store${totalStores === 1 ? '' : 's'} produced new listings in the last 24 hours.`,
+    )
+    return
+  }
+  const lines =
+    shopNames.length === 1
+      ? [
+          `⚠️ <b>Zero publishing</b> — ${escapeHtml(shopNames[0])}`,
+          'No products published in the last 24 hours.',
+        ]
+      : [
+          `⚠️ <b>Zero publishing (last 24h)</b>`,
+          ...shopNames.map((n) => `• ${escapeHtml(n)}`),
+        ]
+  await sendTelegram(lines.join('\n'))
+}

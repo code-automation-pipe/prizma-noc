@@ -70,6 +70,25 @@ export async function getPublishedTodayPerShop(): Promise<DraftCount[]> {
 }
 
 /**
+ * Rolling 24h window of products published to Etsy per shop.
+ * Used by the midnight zero-publishing Telegram check — calendar-day truncation
+ * would always read 0 immediately after 00:00, so we count the prior 24h instead.
+ */
+export async function getPublishedLast24hPerShop(): Promise<DraftCount[]> {
+  const rows = await productsSQL`
+    SELECT shop_id, COUNT(*)::int AS draft_count
+    FROM products
+    WHERE completed_at >= NOW() - INTERVAL '24 hours'
+      AND uploaded_at  >= NOW() - INTERVAL '24 hours'
+    GROUP BY shop_id
+  `
+  return rows.map((r) => ({
+    shop_id: Number(r.shop_id),
+    draft_count: Number(r.draft_count),
+  }))
+}
+
+/**
  * Returns count of products that completed pipeline processing today per shop.
  */
 export async function getCompletedTodayPerShop(): Promise<DraftCount[]> {

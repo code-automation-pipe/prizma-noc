@@ -22,6 +22,7 @@ export async function evaluateAlerts(ctx: AlertContext): Promise<void> {
   })
 
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
 
   for (const rule of rules) {
     const threshold = Number(rule.threshold)
@@ -108,6 +109,11 @@ export async function evaluateAlerts(ctx: AlertContext): Promise<void> {
         }
 
         case 'zero_publishing': {
+          // Only evaluate when the caller actually populated publishedToday.
+          // Hourly crons pass an empty map (data isn't computed there), and
+          // treating "missing" as 0 caused this rule to fire every hour.
+          if (ctx.publishedToday.size === 0) break
+
           const targetStores = rule.store_id
             ? [[...ctx.storeMap.entries()].find(([, s]) => s.id === rule.store_id)].filter(
                 Boolean
@@ -119,7 +125,7 @@ export async function evaluateAlerts(ctx: AlertContext): Promise<void> {
             const [shopId, store] = entry
             const count = ctx.publishedToday.get(shopId) ?? 0
             if (count === 0) {
-              const alreadyFired = await recentAlertExists(rule.id, store.id, oneHourAgo)
+              const alreadyFired = await recentAlertExists(rule.id, store.id, oneDayAgo)
               if (!alreadyFired) {
                 await fireAlert(
                   rule.id,

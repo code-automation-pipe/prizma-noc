@@ -1,1 +1,8 @@
-{}
+{
+  "crons": [
+    {
+      "path": "/api/cron/zero-publishing-check",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}

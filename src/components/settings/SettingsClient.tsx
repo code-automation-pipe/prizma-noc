@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Plus, Pencil, Trash2, Eye, EyeOff, ArrowLeft, FlaskConical, CheckCircle2, XCircle, Loader2, Link2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Eye, EyeOff, ArrowLeft, FlaskConical, CheckCircle2, XCircle, Loader2, Link2, Send } from 'lucide-react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useEffect } from 'react'
@@ -420,6 +420,38 @@ function TestEmailButton({ store }: { store: StoreRecord }) {
   )
 }
 
+// ─── Test Telegram Button ────────────────────────────────────────────────────
+
+function TestTelegramButton() {
+  const [loading, setLoading] = useState(false)
+
+  async function run() {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/test-telegram', { method: 'POST' })
+      const data = await res.json()
+      if (data.ok) {
+        toast.success('Test message sent — check your Telegram')
+      } else {
+        toast.error(data.error ?? 'Failed to send test message', {
+          description: data.raw ? String(data.raw).slice(0, 200) : undefined,
+        })
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Network error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Button variant="outline" size="sm" onClick={run} disabled={loading}>
+      {loading ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+      {loading ? 'Sending…' : 'Test Telegram'}
+    </Button>
+  )
+}
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 export function SettingsClient() {
@@ -543,6 +575,26 @@ export function SettingsClient() {
             {stores.length} store{stores.length !== 1 ? 's' : ''} configured
           </p>
         )}
+      </section>
+
+      {/* Notifications section */}
+      <section className="flex flex-col gap-4">
+        <div>
+          <h2 className="text-sm font-semibold">Notifications</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Verify the Telegram bot is wired up — sends a one-off ping to the configured chat.
+          </p>
+        </div>
+        <div className="rounded-lg border px-4 py-3 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">Telegram bot</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Uses <span className="font-mono">TELEGRAM_BOT_TOKEN</span> +{' '}
+              <span className="font-mono">TELEGRAM_CHAT_ID</span> from env.
+            </p>
+          </div>
+          <TestTelegramButton />
+        </div>
       </section>
     </div>
   )

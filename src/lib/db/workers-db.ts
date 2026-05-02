@@ -1,8 +1,13 @@
 import { neon } from '@neondatabase/serverless'
 
-// products DB — raw scrape data (uploaded_at, pipeline_ended_at, pipeline_cost_usd, …)
-// Same DB as DATABASE_URL; PRODUCTS_DATABASE_URL alias kept for clarity but falls back to DATABASE_URL
-const productsSQL = neon((process.env.PRODUCTS_DATABASE_URL ?? process.env.DATABASE_URL)!)
+// workers-site-etsy DB — holds the `products` table (raw scrape data:
+// uploaded_at, pipeline_ended_at, pipeline_cost_usd, pipeline_status, …).
+// Required: throws on import if WORKERS_DATABASE_URL is unset, so misconfig
+// fails loudly instead of silently zeroing every dashboard metric.
+if (!process.env.WORKERS_DATABASE_URL) {
+  throw new Error('WORKERS_DATABASE_URL is not set')
+}
+const productsSQL = neon(process.env.WORKERS_DATABASE_URL)
 
 export interface DraftCount {
   shop_id: number

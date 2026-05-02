@@ -8,7 +8,7 @@ import { decryptCredentials, encryptCredentials } from '@/lib/crypto/credentials
 import { fetchNewEtsyMessages } from '@/lib/imap/client'
 import { resolveAccessToken, type OAuthCredentials } from '@/lib/graph/oauth'
 import { logMessageReceived } from '@/lib/axiom/events'
-import { notifyMessage, notifyOrder, notifyRefund } from '@/lib/telegram/client'
+import { notifyMessage, notifyOrder, notifyRefund, notifySuspension } from '@/lib/telegram/client'
 
 export async function GET(request: Request) {
   if (request.headers.get('Authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -91,6 +91,11 @@ export async function GET(request: Request) {
             shopName: store.name,
             priceUsd: msg.priceUsd,
             orderId: msg.orderId,
+          })
+        } else if (msg.type === 'suspension') {
+          await notifySuspension({
+            shopName: store.name,
+            subject: msg.subject,
           })
         } else if (msg.subtype) {
           await notifyMessage({

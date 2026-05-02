@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
-import { MessageCircle, ShoppingBag, RotateCcw } from 'lucide-react'
+import { MessageCircle, ShoppingBag, RotateCcw, AlertOctagon } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import {
   Select,
@@ -50,6 +50,7 @@ const TYPE_FILTER_OPTIONS = [
   { value: 'message', label: 'Messages only' },
   { value: 'order', label: 'Orders only' },
   { value: 'refund', label: 'Refunds only' },
+  { value: 'suspension', label: 'Suspensions only' },
 ]
 
 // Stored rows from before refund detection landed are saved with type='order'
@@ -73,6 +74,14 @@ function effectiveType(type: string, subject: string): string {
 }
 
 function TypeBadge({ type }: { type: string }) {
+  if (type === 'suspension') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-md bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide shrink-0">
+        <AlertOctagon className="size-2.5" />
+        Suspension
+      </span>
+    )
+  }
   if (type === 'refund') {
     return (
       <span className="inline-flex items-center gap-1 rounded-md bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide shrink-0">
@@ -159,6 +168,7 @@ export function MessagesFeed({ stores }: MessagesFeedProps) {
   const orderCount = filtered.filter((m) => effectiveType(m.type, m.subject) === 'order').length
   const messageCount = filtered.filter((m) => effectiveType(m.type, m.subject) === 'message').length
   const refundCount = filtered.filter((m) => effectiveType(m.type, m.subject) === 'refund').length
+  const suspensionCount = filtered.filter((m) => effectiveType(m.type, m.subject) === 'suspension').length
 
   return (
     <section>
@@ -169,6 +179,12 @@ export function MessagesFeed({ stores }: MessagesFeedProps) {
             {unreadCount > 0 && (
               <span className="inline-flex items-center rounded-full bg-destructive text-destructive-foreground text-xs font-semibold px-2 py-0.5">
                 {unreadCount} unread
+              </span>
+            )}
+            {suspensionCount > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 text-xs font-semibold px-2 py-0.5">
+                <AlertOctagon className="size-3" />
+                {suspensionCount} suspension{suspensionCount !== 1 ? 's' : ''}
               </span>
             )}
             {orderCount > 0 && (

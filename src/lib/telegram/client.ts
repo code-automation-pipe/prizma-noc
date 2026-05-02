@@ -89,6 +89,21 @@ export async function notifyMessage(m: MessageNotification): Promise<void> {
   await sendTelegram(parts.join('\n'))
 }
 
+export interface SuspensionNotification {
+  shopName: string
+  subject: string
+}
+
+export async function notifySuspension(s: SuspensionNotification): Promise<void> {
+  await sendTelegram(
+    [
+      `🚨 <b>ACCOUNT SUSPENDED</b> — ${escapeHtml(s.shopName)}`,
+      escapeHtml(s.subject),
+      'Check Outlook for the full Trust &amp; Safety notice.',
+    ].join('\n'),
+  )
+}
+
 export async function notifyZeroPublishing(
   shopNames: string[],
   totalStores: number,

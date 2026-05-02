@@ -1,6 +1,6 @@
 import { ImapFlow } from 'imapflow'
 
-export type EtsyEmailType = 'message' | 'order' | 'refund'
+export type EtsyEmailType = 'message' | 'order' | 'refund' | 'suspension'
 export type EtsyMessageSubtype = 'new' | 'reply' | 'help'
 
 export interface DetectedEtsyEmail {
@@ -48,6 +48,13 @@ function classifySubject(subject: string): Classification | null {
   // Skip platform billing first — these subjects often contain "refund" or "Order #"
   // and would otherwise be misclassified as customer refunds/orders.
   if (PLATFORM_BILLING_RE.test(subject)) return null
+  // Trust & Safety suspension notice — must come before message/order checks since
+  // the subject can mention "Etsy" and looks superficially like other notifications.
+  // Variants: "Your Etsy account has been suspended for policy violations",
+  // "Your shop has been suspended", "Your account has been suspended".
+  if (/your\s+(?:etsy\s+)?(?:account|shop)[^\n]*\bsuspend(?:ed|ing)?\b/i.test(subject)) {
+    return { type: 'suspension' }
+  }
   // Help request — from conversations@mail.etsy.com when a buyer opens a Help ticket.
   // Subject variants: "X needs help with an order they placed" or "Help Request: Order #<id>"
   if (/needs help with an order/i.test(subject) || /help request:\s*order\s*#/i.test(subject)) {
@@ -200,6 +207,14 @@ export async function fetchNewEtsyEmails(
             type: 'refund',
             priceUsd: extractPriceUsd(s.envelope.subject),
             orderId: extractOrderId(s.envelope.subject),
+          })
+        } else if (s.type === 'suspension') {
+          results.push({
+            messageId: s.envelope.messageId,
+            senderName: s.envelope.fromName,
+            subject: s.envelope.subject,
+            receivedAt: s.envelope.date,
+            type: 'suspension',
           })
         } else {
           results.push({

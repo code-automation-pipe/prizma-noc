@@ -19,7 +19,7 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
     queryKey: ['dashboard'],
     queryFn: () => fetch('/api/dashboard').then((r) => r.json()),
     initialData: initialData ?? undefined,
-    refetchInterval: 2 * 60 * 1000, // auto-refresh every 2 minutes
+    refetchInterval: 10 * 60 * 1000, // auto-refresh every 10 minutes (Neon compute saver)
   })
 
   if (isLoading && !data) {

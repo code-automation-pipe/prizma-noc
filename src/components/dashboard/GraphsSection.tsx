@@ -42,35 +42,48 @@ interface GraphsSectionProps {
 
 export function GraphsSection({ storeNames }: GraphsSectionProps) {
   const [days, setDays] = useState<7 | 30 | 60>(30)
+  // Lazy-load chart data: only fire fetches for tabs the user actually opens.
+  // Each opened tab stays in the set so switching back uses the React Query cache
+  // instead of re-firing — saves Neon compute on every dashboard page load.
+  const [viewedTabs, setViewedTabs] = useState<Set<string>>(() => new Set(['published']))
+  const handleTabChange = (next: string) => {
+    setViewedTabs((prev) => (prev.has(next) ? prev : new Set(prev).add(next)))
+  }
+  const apiCostViewed = viewedTabs.has('api-cost-daily') || viewedTabs.has('api-cost-cumulative')
 
   const { data: publishedData = [], isLoading: publishedLoading } = useQuery<Record<string, unknown>[]>({
     queryKey: ['charts', 'published', days],
     queryFn: () => fetch(`/api/charts/published?days=${days}`).then((r) => r.json()),
     staleTime: 5 * 60 * 1000,
+    enabled: viewedTabs.has('published'),
   })
 
   const { data: messagesData = [], isLoading: messagesLoading } = useQuery<Record<string, unknown>[]>({
     queryKey: ['charts', 'messages', days],
     queryFn: () => fetch(`/api/charts/messages?days=${days}`).then((r) => r.json()),
     staleTime: 5 * 60 * 1000,
+    enabled: viewedTabs.has('messages'),
   })
 
   const { data: ordersData = [], isLoading: ordersLoading } = useQuery<Record<string, unknown>[]>({
     queryKey: ['charts', 'orders', days],
     queryFn: () => fetch(`/api/charts/orders?days=${days}`).then((r) => r.json()),
     staleTime: 5 * 60 * 1000,
+    enabled: viewedTabs.has('orders'),
   })
 
   const { data: refundsData = [], isLoading: refundsLoading } = useQuery<Record<string, unknown>[]>({
     queryKey: ['charts', 'refunds', days],
     queryFn: () => fetch(`/api/charts/refunds?days=${days}`).then((r) => r.json()),
     staleTime: 5 * 60 * 1000,
+    enabled: viewedTabs.has('refunds'),
   })
 
   const { data: draftsData = [], isLoading: draftsLoading } = useQuery<Record<string, unknown>[]>({
     queryKey: ['charts', 'drafts', days],
     queryFn: () => fetch(`/api/charts/drafts?days=${days}`).then((r) => r.json()),
     staleTime: 5 * 60 * 1000,
+    enabled: viewedTabs.has('drafts'),
   })
 
   const { data: apiCostData, isLoading: apiCostLoading } = useQuery<{
@@ -80,12 +93,14 @@ export function GraphsSection({ storeNames }: GraphsSectionProps) {
     queryKey: ['charts', 'api-cost'],
     queryFn: () => fetch('/api/charts/api-cost').then((r) => r.json()),
     staleTime: 5 * 60 * 1000,
+    enabled: apiCostViewed,
   })
 
   const { data: oxylabsData = [], isLoading: oxylabsLoading } = useQuery<Record<string, unknown>[]>({
     queryKey: ['charts', 'oxylabs'],
     queryFn: () => fetch('/api/charts/oxylabs').then((r) => r.json()),
     staleTime: 5 * 60 * 1000,
+    enabled: viewedTabs.has('oxylabs'),
   })
 
   const storeNameSet = new Set(storeNames)
@@ -123,7 +138,7 @@ export function GraphsSection({ storeNames }: GraphsSectionProps) {
         </div>
       </div>
 
-      <Tabs defaultValue="published">
+      <Tabs defaultValue="published" onValueChange={(v) => handleTabChange(String(v))}>
         <TabsList className="mb-4 flex-wrap h-auto">
           <TabsTrigger value="published">Published</TabsTrigger>
           <TabsTrigger value="orders">Orders</TabsTrigger>

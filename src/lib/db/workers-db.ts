@@ -28,32 +28,74 @@ export interface PipelineSpend {
  * Reads pipeline spend from the products table.
  * Uses a rolling 24h window for "today" to avoid timezone/midnight issues.
  * pipeline_cost_usd already includes all pipeline inference costs.
+ *
+ * Single-query: today + cumulative computed via FILTER aggregations to halve
+ * Neon compute (one scan instead of two).
  */
 export async function getPipelineSpend(): Promise<PipelineSpend> {
-  const [todayRows, allRows] = await Promise.all([
-    productsSQL`
-      SELECT
-        COALESCE(SUM(pipeline_cost_usd), 0)::float   AS total_usd,
-        COALESCE(SUM(pipeline_tokens_in), 0)::int    AS tokens_in,
-        COALESCE(SUM(pipeline_tokens_out), 0)::int   AS tokens_out
-      FROM products
-      WHERE pipeline_ended_at >= NOW() - INTERVAL '24 hours'
-        AND pipeline_cost_usd IS NOT NULL
-    `,
-    productsSQL`
-      SELECT
-        COALESCE(SUM(pipeline_cost_usd), 0)::float AS total_usd
-      FROM products
-      WHERE pipeline_cost_usd IS NOT NULL
-    `,
-  ])
+  const rows = await productsSQL`
+    SELECT
+      COALESCE(SUM(pipeline_cost_usd) FILTER (WHERE pipeline_ended_at >= NOW() - INTERVAL '24 hours'), 0)::float AS today_usd,
+      COALESCE(SUM(pipeline_cost_usd), 0)::float                                                                  AS cumulative_usd,
+      COALESCE(SUM(pipeline_tokens_in)  FILTER (WHERE pipeline_ended_at >= NOW() - INTERVAL '24 hours'), 0)::int  AS tokens_in,
+      COALESCE(SUM(pipeline_tokens_out) FILTER (WHERE pipeline_ended_at >= NOW() - INTERVAL '24 hours'), 0)::int  AS tokens_out
+    FROM products
+    WHERE pipeline_cost_usd IS NOT NULL
+  `
 
   return {
-    today_usd:       Number(todayRows[0]?.total_usd  ?? 0),
-    cumulative_usd:  Number(allRows[0]?.total_usd    ?? 0),
-    today_tokens_in: Number(todayRows[0]?.tokens_in  ?? 0),
-    today_tokens_out:Number(todayRows[0]?.tokens_out ?? 0),
+    today_usd:        Number(rows[0]?.today_usd       ?? 0),
+    cumulative_usd:   Number(rows[0]?.cumulative_usd  ?? 0),
+    today_tokens_in:  Number(rows[0]?.tokens_in       ?? 0),
+    today_tokens_out: Number(rows[0]?.tokens_out      ?? 0),
   }
+}
+
+export interface ShopMetrics {
+  shop_id: number
+  published_today: number
+  completed_today: number
+  not_processed: number
+  ready_to_process: number
+  uploaded: number
+}
+
+/**
+ * One-shot per-shop counts used by the dashboard. Replaces 5 separate
+ * COUNT/GROUP-BY scans of the products table with a single scan that uses
+ * FILTER aggregations — 5× fewer Neon round-trips on every dashboard refresh.
+ */
+export async function getShopMetrics(): Promise<ShopMetrics[]> {
+  const rows = await productsSQL`
+    SELECT
+      shop_id,
+      COUNT(*) FILTER (
+        WHERE completed_at >= DATE_TRUNC('day', NOW())
+          AND uploaded_at  >= DATE_TRUNC('day', NOW())
+      )::int AS published_today,
+      COUNT(*) FILTER (
+        WHERE completed_at >= DATE_TRUNC('day', NOW())
+      )::int AS completed_today,
+      COUNT(*) FILTER (
+        WHERE pipeline_status = 'none' OR pipeline_status IS NULL
+      )::int AS not_processed,
+      COUNT(*) FILTER (
+        WHERE pipeline_status ILIKE 'completed'
+      )::int AS ready_to_process,
+      COUNT(*) FILTER (
+        WHERE pipeline_status ILIKE 'uploaded'
+      )::int AS uploaded
+    FROM products
+    GROUP BY shop_id
+  `
+  return rows.map((r) => ({
+    shop_id:          Number(r.shop_id),
+    published_today:  Number(r.published_today),
+    completed_today:  Number(r.completed_today),
+    not_processed:    Number(r.not_processed),
+    ready_to_process: Number(r.ready_to_process),
+    uploaded:         Number(r.uploaded),
+  }))
 }
 
 /**

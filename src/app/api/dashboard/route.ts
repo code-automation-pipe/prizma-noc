@@ -1,14 +1,7 @@
 import { count, desc, eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { alert_rules, api_ledger, etsy_messages, stores, triggered_alerts } from '@/lib/db/schema'
-import {
-  getPublishedTodayPerShop,
-  getCompletedTodayPerShop,
-  getNotProcessedPerShop,
-  getReadyToProcessPerShop,
-  getUploadedPerShop,
-  getPipelineSpend,
-} from '@/lib/db/workers-db'
+import { getShopMetrics, getPipelineSpend } from '@/lib/db/workers-db'
 import { decryptCredentials } from '@/lib/crypto/credentials'
 import { computeStoreHealth } from '@/lib/health'
 import { fetchPipelineItemsToday } from '@/lib/axiom/pipeline'
@@ -23,11 +16,7 @@ export async function GET() {
     recentAlerts,
     ledgerEntries,
     pipelineSpend,
-    publishedCounts,
-    completedCounts,
-    notProcessedCounts,
-    readyToProcessCounts,
-    uploadedCounts,
+    shopMetrics,
     pipelineItemsToday,
   ] = await Promise.all([
     db.query.stores.findMany({
@@ -60,11 +49,7 @@ export async function GET() {
       orderBy: desc(api_ledger.created_at),
     }),
     getPipelineSpend().catch((e) => { console.error('[workers-db] getPipelineSpend failed:', e); return null }),
-    getPublishedTodayPerShop().catch((e) => { console.error('[workers-db] getPublishedTodayPerShop failed:', e); return [] }),
-    getCompletedTodayPerShop().catch((e) => { console.error('[workers-db] getCompletedTodayPerShop failed:', e); return [] }),
-    getNotProcessedPerShop().catch((e) => { console.error('[workers-db] getNotProcessedPerShop failed:', e); return [] }),
-    getReadyToProcessPerShop().catch((e) => { console.error('[workers-db] getReadyToProcessPerShop failed:', e); return [] }),
-    getUploadedPerShop().catch((e) => { console.error('[workers-db] getUploadedPerShop failed:', e); return [] }),
+    getShopMetrics().catch((e) => { console.error('[workers-db] getShopMetrics failed:', e); return [] }),
     fetchPipelineItemsToday().catch((e) => { console.error('[axiom-pipeline] failed:', e); return new Map<number, { completed: number; failed: number }>() }),
   ])
 
@@ -151,11 +136,11 @@ export async function GET() {
     plan_limits: planLimits,
   }
 
-  const publishedMap = new Map(publishedCounts.map((p) => [p.shop_id, p.draft_count]))
-  const completedMap = new Map(completedCounts.map((c) => [c.shop_id, c.draft_count]))
-  const notProcessedMap = new Map(notProcessedCounts.map((n) => [n.shop_id, n.draft_count]))
-  const readyToProcessMap = new Map(readyToProcessCounts.map((r) => [r.shop_id, r.draft_count]))
-  const uploadedMap = new Map(uploadedCounts.map((u) => [u.shop_id, u.draft_count]))
+  const publishedMap      = new Map(shopMetrics.map((m) => [m.shop_id, m.published_today]))
+  const completedMap      = new Map(shopMetrics.map((m) => [m.shop_id, m.completed_today]))
+  const notProcessedMap   = new Map(shopMetrics.map((m) => [m.shop_id, m.not_processed]))
+  const readyToProcessMap = new Map(shopMetrics.map((m) => [m.shop_id, m.ready_to_process]))
+  const uploadedMap       = new Map(shopMetrics.map((m) => [m.shop_id, m.uploaded]))
 
   // Build store status list
   const storeList: StoreWithStatus[] = allStores.map((s) => {

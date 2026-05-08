@@ -120,6 +120,12 @@ export async function getPublishedTodayPerShop(): Promise<DraftCount[]> {
  * Rolling 24h window of products published to Etsy per shop.
  * Used by the midnight zero-publishing Telegram check — calendar-day truncation
  * would always read 0 immediately after 00:00, so we count the prior 24h instead.
+ *
+ * Note: `submitted_at` (workers-site-etsy `hasSubmittedToday`) is NOT a reliable
+ * substitute here — it's only populated when a worker clicks Submit in the UI;
+ * shops whose products land on Etsy via the auto/pending path never set it,
+ * which would falsely flag them silent. `uploaded_at`+`completed_at` is the
+ * union we actually want.
  */
 export async function getPublishedLast24hPerShop(): Promise<DraftCount[]> {
   const rows = await productsSQL`
